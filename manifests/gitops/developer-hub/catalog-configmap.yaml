@@ -86,6 +86,9 @@ data:
       name: people-rest-api
       title: People REST API
       description: OpenAPI specification for the People CRUD backend secured with Keycloak.
+      annotations:
+        github.com/project-slug: ${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
+        backstage.io/source-location: url:https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service
       tags:
         - openapi
         - rest
@@ -94,6 +97,12 @@ data:
         - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
           title: Live OpenAPI (Quarkus)
           icon: docs
+        - url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/actions
+          title: GitHub Actions
+          icon: github
+        - url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service
+          title: Source code
+          icon: github
     spec:
       type: openapi
       lifecycle: production

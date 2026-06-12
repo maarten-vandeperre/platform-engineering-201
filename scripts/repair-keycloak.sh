@@ -13,11 +13,7 @@ for file in keycloak-secret.yaml keycloak-realm-configmap.yaml keycloak-deployme
   render_manifest "${MANIFESTS_DIR}/keycloak/${file}" | oc apply -f -
 done
 
-echo "Ensuring Keycloak is running..."
-oc scale deployment/keycloak --replicas=1 -n "${WORKSHOP_NAMESPACE}"
-oc rollout status deployment/keycloak -n "${WORKSHOP_NAMESPACE}" --timeout=600s
-
-resolve_keycloak_urls
+ensure_keycloak_running
 "${SCRIPTS_DIR}/configure-keycloak-realm.sh"
 
 KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")

@@ -1,25 +1,45 @@
 # Platform Engineering 201
 
-Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, GitHub Actions, and a Backstage software template.
+Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, and a Backstage software template.
 
 ## Start here
 
-- [Workshop guide](docs/workshop/README.md)
+- [Workshop guide](docs/workshop/README.md) — full Day 0 → Done path
 
-## Quick deploy
+## Quick deploy (empty namespace)
 
 ```bash
 cp scripts/workshop.env.example scripts/workshop.env
-# edit WORKSHOP_NAMESPACE if needed
+# Set WORKSHOP_NAMESPACE and CLUSTER_ROUTER_BASE for your cluster
+
+oc login --token=<token> --server=<api-url>
 chmod +x scripts/*.sh scripts/lib/*.sh
 ./scripts/bootstrap-workshop.sh
 ```
 
-If PostgreSQL or the backend become unavailable later:
+Helm instead of operators:
 
 ```bash
-./scripts/repair-people-app.sh
+export WORKSHOP_INSTALL_METHOD=helm
+./scripts/bootstrap-workshop.sh
+```
+
+Validate:
+
+```bash
+./scripts/validate-workshop.sh
 ./e2e/run-e2e.sh
+```
+
+## Repair (workloads scaled down)
+
+```bash
+./scripts/ensure-workshop-platform.sh   # Keycloak, RHDH PostgreSQL, catalog server
+./scripts/repair-people-app.sh
+./scripts/repair-developer-hub.sh
+./scripts/configure-developer-hub-catalog.sh
+./scripts/setup-developer-hub-config.sh
+./scripts/create-github-oauth-app.sh --oauth-app   # GitHub Actions CI tab
 ```
 
 ## Repository structure
@@ -27,8 +47,9 @@ If PostgreSQL or the backend become unavailable later:
 ```
 apps/people-service/          # Quarkus + React CRUD demo
 manifests/gitops/             # Operators, Argo CD, app, Developer Hub, catalog
-scripts/                      # Configurable bootstrap scripts
-e2e/                          # Selenium end-to-end tests (Developer Hub login + topology)
+manifests/helm/               # Helm values for Argo CD and RHDH
+scripts/                      # Bootstrap, install, repair, validate
+e2e/                          # Selenium + HTTP end-to-end tests
 docs/workshop/                # Step-by-step workshop documentation
 .github/workflows/            # GHCR build pipeline
 ```

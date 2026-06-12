@@ -9,7 +9,7 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 sys.path.insert(0, str(Path(__file__).parent / "tests"))
-from helpers import wait_for_backend_ready
+from helpers import wait_for_backend_ready, wait_for_keycloak_ready, wait_for_rhdh_ready
 
 
 def _env(name: str, default: str = "") -> str:
@@ -49,7 +49,10 @@ def workshop_config():
 
 @pytest.fixture(scope="session")
 def ready_stack(workshop_config):
-    return wait_for_backend_ready(workshop_config)
+    health = wait_for_backend_ready(workshop_config)
+    wait_for_keycloak_ready(workshop_config)
+    wait_for_rhdh_ready(workshop_config)
+    return health
 
 
 @pytest.fixture

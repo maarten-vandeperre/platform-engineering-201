@@ -8,16 +8,43 @@
 
 Expected output:
 
-- Backend health JSON with `"status": "UP"`
+- Backend health JSON with `"status": "UP"` (database check included)
+- Keycloak pod ready and realm reachable
 - Keycloak token obtained for user `user`
 - HTTP 401 on unauthenticated API call (when OIDC enabled)
 - Created person JSON with `id`, `firstName`, `lastName`, `age`
-- List of people including the created record
 - HTTP 204 on delete
 - HTTP 200 on frontend `/`
+- OpenAPI reachable at backend `/q/openapi` and frontend `/openapi.yaml`
+- Catalog server serves `entities.yaml` and `tech-radar.json`
 - Keycloak token for Developer Hub user `devhub`
 - HTTP 302 on Developer Hub OIDC start (redirect to Keycloak)
 - OpenShift resources labeled `app.kubernetes.io/part-of=people-service`
+
+## End-to-end tests
+
+Requires Python 3.9+ and Google Chrome:
+
+```bash
+./e2e/run-e2e.sh
+```
+
+Tests cover:
+
+1. Keycloak reachability and OIDC client registration
+2. Backend/database health and People API CRUD
+3. Frontend login, runtime config, and UI CRUD
+4. OpenAPI exposure (backend, frontend, catalog server)
+5. Developer Hub Kubernetes and Topology tabs
+6. Developer Hub API catalog listing (`People REST API`)
+7. Developer Hub **CI** tab on the People REST API entity (GitHub Actions plugin)
+8. Developer Hub Tech Radar page
+
+Run with visible browser:
+
+```bash
+E2E_HEADLESS=false ./e2e/run-e2e.sh
+```
 
 ## Manual checks
 
@@ -25,84 +52,72 @@ Expected output:
 
 ```bash
 oc get all,route,pvc -n $WORKSHOP_NAMESPACE -l app.kubernetes.io/part-of=people-service
+oc get deploy,pod -n $WORKSHOP_NAMESPACE -l app=keycloak
+oc get deploy,pod -n $WORKSHOP_NAMESPACE -l app=workshop-catalog-server
 ```
+
+### OpenAPI
+
+```bash
+BACKEND=$(oc get route people-backend -o jsonpath='{.spec.host}')
+FRONTEND=$(oc get route people-frontend -o jsonpath='{.spec.host}')
+curl -sk "https://${BACKEND}/q/openapi" | head -5
+curl -sk -o /dev/null -w "HTTP %{http_code}\n" "https://${FRONTEND}/openapi.yaml"
+```
+
+### Developer Hub
+
+```bash
+RHDH_HOST=$(oc get route redhat-developer-hub -o jsonpath='{.spec.host}')
+echo "https://${RHDH_HOST}/catalog?filters%5Bkind%5D=api"
+echo "https://${RHDH_HOST}/tech-radar"
+```
+
+Sign in as **`devhub` / `r#dh@t`**.
 
 ### API CRUD (with Keycloak)
 
-```bash
-source scripts/workshop.env
-KEYCLOAK_HOST=$(oc get route keycloak -o jsonpath='{.spec.host}')
-BACKEND=$(oc get route people-backend -o jsonpath='{.spec.host}')
+See [04-deploy-people-app](04-deploy-people-app.md) or run `./scripts/validate-workshop.sh`.
 
-TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_HOST}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token" \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d "client_id=${KEYCLOAK_CLIENT_ID}" \
-  -d 'username=user' \
-  -d 'password=r3dh@t' \
-  -d 'grant_type=password' | jq -r .access_token)
+## Repair scripts
 
-# Create
-curl -sk -X POST "https://${BACKEND}/api/people" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H 'Content-Type: application/json' \
-  -d '{"firstName":"Katherine","lastName":"Johnson","age":44}'
+| Symptom | Script |
+|---------|--------|
+| Keycloak / RHDH PostgreSQL / catalog server scaled to 0 | `./scripts/ensure-workshop-platform.sh` |
+| Keycloak "Application is not available" / scaled to 0 | `./scripts/ensure-workshop-platform.sh` or `./scripts/repair-keycloak.sh` |
+| PostgreSQL crash-loop / backend not ready | `./scripts/repair-people-app.sh` |
+| API catalog or Tech Radar empty | `./scripts/configure-developer-hub-catalog.sh` |
+| Developer Hub login/K8s/API issues | `./scripts/setup-developer-hub-config.sh` |
+| GitHub Actions CI tab / Authorize GitHub (first time) | `./scripts/create-github-oauth-app.sh --oauth-app` |
+| Re-apply existing GitHub OAuth App to Developer Hub | `./scripts/setup-github-oauth.sh` |
+| Developer Hub login 500 / `ECONNREFUSED :5432` | `./scripts/repair-developer-hub.sh` (RHDH PostgreSQL scaled to 0) |
+| Full stack after idle namespace | `./scripts/ensure-workshop-platform.sh` then `./scripts/repair-people-app.sh` and `./e2e/run-e2e.sh` |
 
-# Read
-curl -sk -H "Authorization: Bearer ${TOKEN}" "https://${BACKEND}/api/people" | jq .
-
-# Update
-curl -sk -X PUT "https://${BACKEND}/api/people/1" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H 'Content-Type: application/json' \
-  -d '{"firstName":"Katherine","lastName":"Johnson","age":45}'
-
-# Delete
-curl -sk -X DELETE -H "Authorization: Bearer ${TOKEN}" "https://${BACKEND}/api/people/1"
-```
-
-### Builds
+Reset PostgreSQL data (destructive):
 
 ```bash
-oc get builds -n $WORKSHOP_NAMESPACE
-oc logs -f build/people-backend-1 -n $WORKSHOP_NAMESPACE
+REPAIR_RESET_POSTGRES_DATA=true ./scripts/repair-people-app.sh
 ```
-
-### Developer Hub (Keycloak SSO)
-
-```bash
-source scripts/workshop.env
-KEYCLOAK_HOST=$(oc get route keycloak -o jsonpath='{.spec.host}')
-RHDH_HOST=$(oc get route redhat-developer-hub -o jsonpath='{.spec.host}')
-
-# Token for devhub user
-curl -sk -X POST "https://${KEYCLOAK_HOST}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token" \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d "client_id=${RHDH_KEYCLOAK_CLIENT_ID}" \
-  -d "client_secret=${RHDH_KEYCLOAK_CLIENT_SECRET}" \
-  -d "username=${RHDH_KEYCLOAK_USER}" \
-  -d "password=${RHDH_KEYCLOAK_PASSWORD}" \
-  -d 'grant_type=password' | jq '{token_type, expires_in}'
-
-# Should redirect (302) to Keycloak login
-curl -sk -o /dev/null -w "HTTP %{http_code}\n" \
-  "https://${RHDH_HOST}/api/auth/oidc/start?env=production"
-```
-
-Open `https://${RHDH_HOST}` and sign in as **`devhub` / `r#dh@t`**.
 
 ## Common issues
 
 | Symptom | Fix |
 |---------|-----|
-| Backend `CrashLoopBackOff` | Check DB connectivity: `oc logs deployment/people-backend`. Ensure postgres is ready. |
+| Bootstrap fails on operators | Use `WORKSHOP_INSTALL_METHOD=helm` or ask admin to install operators |
+| Keycloak login popup shows OpenShift 503 | `./scripts/ensure-workshop-platform.sh` |
+| Backend `CrashLoopBackOff` | `./scripts/repair-people-app.sh` — check postgres logs |
+| Frontend `${KEYCLOAK_URL}` placeholders / 414 login URL | `./scripts/repair-people-app.sh` (rebuilds frontend, applies runtime ConfigMap) |
 | Image pull error for GHCR | Use OpenShift builds (default) or add `imagePullSecrets` |
-| Build fails on Quarkus | Check build logs; cluster builder uses Java 17 UBI image |
-| Argo CD 403 in Developer Hub | Re-run `./scripts/setup-argocd-token.sh` |
-| GitHub Actions tab empty | Set valid `GITHUB_TOKEN` in `app-secrets-rhdh` |
-| Catalog entity missing | Verify git URL in app-config; check `catalog-info.yaml` syntax |
+| Argo CD 403 in Developer Hub | `./scripts/setup-argocd-token.sh` |
+| GitHub Actions tab empty | Set valid `GITHUB_TOKEN` in secrets |
+| GitHub Actions Authorize popup 404 (`client_id=changeme`) | `./scripts/create-github-oauth-app.sh --oauth-app` |
+| GitHub Actions "Unknown auth provider github" | `./scripts/create-github-oauth-app.sh --oauth-app` then `./scripts/setup-developer-hub-config.sh` |
+| Lost OAuth client secret | Regenerate in GitHub app settings, update `workshop.env`, run `./scripts/setup-github-oauth.sh` |
+| Developer Hub login 500 (`ECONNREFUSED :5432`) | `./scripts/repair-developer-hub.sh` |
+| Catalog entity missing | `./scripts/configure-developer-hub-catalog.sh` |
+| API listing empty | Ensure catalog server is running (`oc get deploy workshop-catalog-server`) |
 | API returns 401/403 | Obtain Keycloak token; user must have `people-crud` role |
-| Keycloak login loop | Check frontend `KEYCLOAK_URL` env matches Keycloak route |
-| PostgreSQL not ready | `oc describe pod -l app=people-postgres` — check PVC binding |
+| Wrong cluster URLs | Set `CLUSTER_ROUTER_BASE` in `workshop.env` and re-run config scripts |
 
 ## Clean up
 
@@ -111,6 +126,7 @@ oc delete application people-service -n $WORKSHOP_NAMESPACE --ignore-not-found
 oc delete argocd workshop-gitops -n $WORKSHOP_NAMESPACE --ignore-not-found
 oc delete backstage developer-hub -n $WORKSHOP_NAMESPACE --ignore-not-found
 oc delete deployment,svc,route,bc,is,pvc,secret -l app.kubernetes.io/part-of=people-service -n $WORKSHOP_NAMESPACE
+oc delete deploy,svc,route keycloak workshop-catalog-server -n $WORKSHOP_NAMESPACE --ignore-not-found
 ```
 
 To remove operators, delete Subscriptions and CSVs (may require admin).

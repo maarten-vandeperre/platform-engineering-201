@@ -49,10 +49,11 @@ export default function App({ auth }) {
   async function handleSubmit(event) {
     event.preventDefault();
     setError('');
+    const formElement = event.currentTarget;
     const payload = {
-      firstName: form.firstName,
-      lastName: form.lastName,
-      age: Number(form.age),
+      firstName: formElement.elements.firstName.value.trim(),
+      lastName: formElement.elements.lastName.value.trim(),
+      age: Number(formElement.elements.age.value),
     };
 
     try {
@@ -105,31 +106,31 @@ export default function App({ auth }) {
 
       <section className="card">
         <h2>{editingId ? 'Edit person' : 'Add person'}</h2>
-        <form onSubmit={handleSubmit} className="form-grid">
+        <form key={editingId ?? 'create'} onSubmit={handleSubmit} className="form-grid">
           <label>
             First name
             <input
-              value={form.firstName}
-              onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              name="firstName"
+              defaultValue={form.firstName}
               required
             />
           </label>
           <label>
             Last name
             <input
-              value={form.lastName}
-              onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+              name="lastName"
+              defaultValue={form.lastName}
               required
             />
           </label>
           <label>
             Age
             <input
+              name="age"
               type="number"
               min="0"
               max="150"
-              value={form.age}
-              onChange={(e) => setForm({ ...form, age: e.target.value })}
+              defaultValue={form.age}
               required
             />
           </label>

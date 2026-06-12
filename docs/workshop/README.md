@@ -1,6 +1,6 @@
 # Developer Hub on OpenShift — Workshop Guide
 
-This workshop installs **Red Hat Developer Hub** on OpenShift, deploys a sample **Quarkus + PostgreSQL + React** application with GitOps, and connects catalog entities, Argo CD, GitHub Actions, and a software template.
+This workshop installs **Red Hat Developer Hub** on OpenShift, deploys a sample **Quarkus + PostgreSQL + React** application with GitOps, and connects catalog entities, OpenAPI, Technology Radar, Argo CD, GitHub Actions, and a software template.
 
 ## Repository layout
 
@@ -9,80 +9,138 @@ This workshop installs **Red Hat Developer Hub** on OpenShift, deploys a sample 
 | `apps/people-service/` | Sample CRUD application (Java Quarkus backend, React frontend) |
 | `manifests/gitops/` | GitOps manifests for operators, Argo CD, the app, Developer Hub, and catalog |
 | `scripts/` | Bootstrap and helper scripts (configurable via `workshop.env`) |
+| `e2e/` | Selenium end-to-end tests against the live cluster |
 | `docs/workshop/` | Step-by-step workshop documentation |
 
-## Quick start
+## Day 0 → Done (recommended path)
 
-1. Copy and edit configuration:
+### 1. Prerequisites
+
+- OpenShift 4.x cluster and `oc` logged in
+- Permission to create Deployments, Routes, PVCs, BuildConfigs in your namespace
+- **Either** OperatorGroup/Subscription access **or** Helm (see step 3)
+- Local tools: `curl`, `jq`, `envsubst` (gettext)
+
+Optional for e2e: Python 3.9+, Google Chrome.
+
+See [01-prerequisites](01-prerequisites.md).
+
+### 2. Configure
 
 ```bash
 cp scripts/workshop.env.example scripts/workshop.env
-# Edit WORKSHOP_NAMESPACE, git repo URL, GitHub org, etc.
+# Edit WORKSHOP_NAMESPACE, WORKSHOP_GIT_REPO, CLUSTER_ROUTER_BASE
 ```
 
-2. Log in to OpenShift and select your project:
+**Critical:** set `CLUSTER_ROUTER_BASE` to your cluster apps domain (everything after the first hostname segment), e.g. `apps.cluster.example.com`. The bootstrap script can auto-detect this from the OpenShift console route when possible.
 
-```bash
-oc login --token=<token> --server=<api-url>
-oc project rh-ee-mvandepe-dev   # or your namespace from workshop.env
-```
+See [02-configuration](02-configuration.md).
 
-3. Run the full bootstrap:
+### 3. Bootstrap (one command)
 
 ```bash
 chmod +x scripts/*.sh scripts/lib/*.sh
 ./scripts/bootstrap-workshop.sh
 ```
 
-4. Validate:
+This runs the full sequence:
+
+| Phase | Script(s) |
+|-------|-------------|
+| Platform (operators) | `install-operators.sh`, `setup-argocd.sh` |
+| Keycloak | `setup-keycloak.sh` |
+| People app | `deploy-people-app.sh` |
+| Developer Hub | `install-developer-hub.sh` |
+| Argo CD token | `setup-argocd-token.sh` |
+| RHDH config | `setup-developer-hub-kubernetes.sh`, `setup-developer-hub-config.sh`, `configure-developer-hub-catalog.sh` |
+| Validate | `validate-workshop.sh` |
+
+**Helm path** (no operators):
+
+```bash
+export WORKSHOP_INSTALL_METHOD=helm
+./scripts/bootstrap-workshop.sh
+```
+
+**Skip platform** (RHDH already installed):
+
+```bash
+export WORKSHOP_INSTALL_METHOD=skip-platform
+./scripts/bootstrap-workshop.sh
+```
+
+**Include e2e tests:**
+
+```bash
+RUN_E2E=true ./scripts/bootstrap-workshop.sh
+```
+
+### 4. Validate
 
 ```bash
 ./scripts/validate-workshop.sh
+./e2e/run-e2e.sh
 ```
 
-## Workshop modules
+### 5. Sign in
 
-1. [Prerequisites](01-prerequisites.md)
-2. [Configure the workshop](02-configuration.md)
-3. [Install operators](03-install-operators.md) — or [Install with Helm (no operators)](03b-install-with-helm.md)
-4. [Set up Keycloak](04b-setup-keycloak.md)
-5. [Deploy the People Service](04-deploy-people-app.md)
-6. [Install OpenShift GitOps / Argo CD](05-setup-argocd.md)
-7. [Install Developer Hub](06-install-developer-hub.md)
-8. [Catalog, template, and integrations](07-developer-hub-catalog.md)
-9. [Validation and troubleshooting](08-validation.md)
+| System | User | Password |
+|--------|------|----------|
+| People app | `user` | `r3dh@t` |
+| Developer Hub | `devhub` | `r#dh@t` (hash `#`, not `3`) |
+| Keycloak admin | `admin` | `r3dh@t` |
+
+## Manual step-by-step modules
+
+Follow these if you prefer to run each phase yourself or if bootstrap fails partway:
+
+| Step | Module | What it does |
+|------|--------|--------------|
+| 1 | [01-prerequisites](01-prerequisites.md) | Tools, namespace, fork |
+| 2 | [02-configuration](02-configuration.md) | `workshop.env` variables |
+| 3a | [03-install-operators](03-install-operators.md) | GitOps + RHDH operators |
+| 3b | [03b-install-with-helm](03b-install-with-helm.md) | Helm alternative (no operators) |
+| 4 | [04b-setup-keycloak](04b-setup-keycloak.md) | Keycloak + workshop realm |
+| 5 | [04-deploy-people-app](04-deploy-people-app.md) | PostgreSQL, builds, Quarkus + React |
+| 6 | [05-setup-argocd](05-setup-argocd.md) | Argo CD instance + Application (optional) |
+| 7 | [06-install-developer-hub](06-install-developer-hub.md) | Developer Hub instance + OIDC |
+| 8 | [07-developer-hub-catalog](07-developer-hub-catalog.md) | Catalog, OpenAPI, Tech Radar |
+| 9 | [08-validation](08-validation.md) | Validation, e2e, troubleshooting |
 
 ## What you will see in Developer Hub
 
-After completing the workshop:
+- **Catalog → Component**: `people-service` with GitHub, Keycloak, People UI/API, and Topology links
+- **Catalog → APIs**: `People REST API` (OpenAPI from live Quarkus `/q/openapi`)
+- **Tech Radar**: Quarkus, React, PostgreSQL, OpenShift, Keycloak, Argo CD, Developer Hub
+- **CD tab**: Argo CD sync status (when token configured)
+- **CI tab**: GitHub Actions (requires `GITHUB_TOKEN` + GitHub OAuth App — see [01-prerequisites](01-prerequisites.md) or `./scripts/create-github-oauth-app.sh --oauth-app`)
+- **Kubernetes / Topology**: People Service workloads in your namespace
+- **Create → Template**: Quarkus + React + PostgreSQL scaffolder
 
-- **Catalog → Component**: `people-service` with links to GitHub, Keycloak, People UI/API, and OpenShift Topology
-- **CD tab**: Argo CD sync status for the `people-service` application
-- **CI/CD tab**: GitHub Actions workflow runs (requires a GitHub token)
-- **Kubernetes / Topology tab**: Deployments, Services, Routes for `app.kubernetes.io/part-of=people-service`
-- **Create → Template**: `Quarkus + React + PostgreSQL on OpenShift` scaffolder template
+## OpenAPI endpoints
+
+| URL | Description |
+|-----|-------------|
+| `https://people-backend-<ns>.<router>/q/openapi` | Live Quarkus spec |
+| `https://people-frontend-<ns>.<router>/openapi.yaml` | Same spec via frontend proxy |
+
+## Repair scripts (shared dev namespaces)
+
+Workloads may be scaled to zero between sessions:
+
+```bash
+./scripts/repair-keycloak.sh
+./scripts/repair-people-app.sh
+./scripts/repair-developer-hub.sh
+./scripts/configure-developer-hub-catalog.sh
+./scripts/setup-developer-hub-config.sh
+./scripts/create-github-oauth-app.sh --oauth-app   # CI tab Authorize GitHub
+```
 
 ## Sample application
 
-- **Frontend route**: `https://people-frontend-<namespace>.<cluster-domain>/`
-- **Backend API**: `GET/POST/PUT/DELETE /api/people` (requires Keycloak token with `people-crud` role)
-- **Keycloak**: admin `admin` / `r3dh@t`, People app user `user` / `r3dh@t`, Developer Hub user `devhub` / `r#dh@t` (also has People API access)
-- **Health**: `GET /q/health` (unauthenticated)
+- **Frontend**: `https://people-frontend-<namespace>.<cluster-domain>/`
+- **Backend API**: `/api/people` (Keycloak Bearer token with `people-crud` role)
+- **Health**: `/q/health` (unauthenticated)
 
-Person object fields: `firstName`, `lastName`, `age`.
-
-## GitHub Actions
-
-Pushes to `main` under `apps/people-service/` trigger `.github/workflows/build-and-push.yaml`, which builds and pushes:
-
-- `ghcr.io/<owner>/platform-engineering-201/people-backend:latest`
-- `ghcr.io/<owner>/platform-engineering-201/people-frontend:latest`
-
-To use GHCR images instead of OpenShift builds, set in `scripts/workshop.env`:
-
-```bash
-export WORKSHOP_BACKEND_IMAGE=ghcr.io/<owner>/platform-engineering-201/people-backend:latest
-export WORKSHOP_FRONTEND_IMAGE=ghcr.io/<owner>/platform-engineering-201/people-frontend:latest
-```
-
-Ensure the namespace can pull from GHCR (image pull secret or public package).
+Person fields: `firstName`, `lastName`, `age`.

@@ -11,14 +11,7 @@ require_oc
 command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
-if oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
-  KEYCLOAK_READY=$(oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" \
-    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-  if [[ "${KEYCLOAK_READY}" != "1" ]]; then
-    echo "Keycloak is not running (readyReplicas=${KEYCLOAK_READY}). Run ./scripts/repair-keycloak.sh" >&2
-    exit 1
-  fi
-fi
+ensure_workshop_platform
 
 BACKEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-backend")
 FRONTEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-frontend")

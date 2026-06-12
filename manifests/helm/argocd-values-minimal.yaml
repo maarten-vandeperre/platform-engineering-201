@@ -1,0 +1,38 @@
+# Minimal Argo CD Helm values for namespace-scoped install (no cluster RBAC)
+openshift:
+  enabled: true
+
+server:
+  route:
+    enabled: true
+    hostname: ${ARGOCD_ROUTE_HOST}
+  extraArgs:
+    - --insecure
+  service:
+    type: ClusterIP
+
+configs:
+  secret:
+    argocdServerAdminPassword: "${ARGOCD_ADMIN_PASSWORD}"
+
+crds:
+  install: ${ARGOCD_INSTALL_CRDS:-true}
+
+global:
+  domain: ${ARGOCD_ROUTE_HOST}
+
+controller:
+  serviceAccount:
+    create: true
+
+applicationSet:
+  enabled: false
+
+notifications:
+  enabled: false
+
+dex:
+  enabled: false
+
+redis:
+  enabled: true

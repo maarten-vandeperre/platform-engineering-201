@@ -23,6 +23,7 @@ fi
 
 # Postgres and services first (exclude build configs and app deployments initially)
 for file in postgres-secret.yaml postgres-pvc.yaml postgres-deployment.yaml postgres-service.yaml \
+  frontend-nginx-configmap.yaml workshop-runtime-config.yaml \
   imagestream-backend.yaml imagestream-frontend.yaml backend-service.yaml backend-route.yaml \
   frontend-service.yaml frontend-route.yaml; do
   render_manifest "${MANIFESTS_DIR}/people-app/${file}" | oc apply -f -

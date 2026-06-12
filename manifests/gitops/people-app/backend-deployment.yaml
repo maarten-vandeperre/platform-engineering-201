@@ -39,12 +39,9 @@ spec:
               value: ${PEOPLE_DB_PASSWORD}
             - name: DB_JDBC_URL
               value: jdbc:postgresql://people-postgres:5432/${PEOPLE_DB_NAME}
-            - name: OIDC_ENABLED
-              value: "${OIDC_ENABLED}"
-            - name: OIDC_AUTH_SERVER_URL
-              value: "https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/realms/${KEYCLOAK_REALM}"
-            - name: OIDC_CLIENT_ID
-              value: "${KEYCLOAK_CLIENT_ID}"
+          envFrom:
+            - configMapRef:
+                name: people-workshop-runtime
           readinessProbe:
             httpGet:
               path: /q/health/ready

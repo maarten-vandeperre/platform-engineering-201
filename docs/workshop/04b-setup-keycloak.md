@@ -43,9 +43,17 @@ On an already-running Keycloak instance, apply realm updates idempotently:
 
 ## Deploy with oc apply
 
+Bootstrap deploys Keycloak automatically. Manual install:
+
 ```bash
-source scripts/workshop.env   # or workshop.env.example defaults
+source scripts/workshop.env
 ./scripts/setup-keycloak.sh
+```
+
+Or repair an existing deployment scaled to zero:
+
+```bash
+./scripts/repair-keycloak.sh
 ```
 
 Or apply manifests manually:

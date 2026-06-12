@@ -1,17 +1,18 @@
 # 4. Deploy the People Service
 
-Deploy Keycloak (if not already running), PostgreSQL, build container images, and run the Quarkus + React application secured with OIDC.
+Deploy PostgreSQL, build container images, and run the Quarkus + React application secured with Keycloak OIDC.
+
+Keycloak must be running first — see [Set up Keycloak](04b-setup-keycloak.md). Bootstrap and `deploy-people-app.sh` call `setup-keycloak.sh` automatically when `OIDC_ENABLED=true`.
 
 ```bash
 ./scripts/deploy-people-app.sh
 ```
 
-The script automatically calls `setup-keycloak.sh` when `OIDC_ENABLED=true` and Keycloak URLs are not yet configured.
-
 ## Application architecture
 
 ```
 Browser → Keycloak login → Route (people-frontend) → nginx → /api/* + Bearer token → people-backend (Quarkus OIDC)
+         ↳ /openapi.yaml ─────────────────────────────────────────────────────────────→ /q/openapi
                                                                                               ↓
                                                                                     people-postgres (PostgreSQL)
 ```
@@ -24,12 +25,13 @@ Browser → Keycloak login → Route (people-frontend) → nginx → /api/* + Be
 | `postgres-pvc.yaml` | 1Gi persistent volume for PostgreSQL data |
 | `postgres-deployment.yaml` | PostgreSQL 16 |
 | `postgres-service.yaml` | ClusterIP service on port 5432 |
+| `frontend-nginx-configmap.yaml` | Nginx config with `/api`, `/q`, and `/openapi.yaml` proxies |
 | `imagestream-*.yaml` | Internal image registry tags |
 | `build-backend.yaml` | OpenShift build for Quarkus (multi-stage Dockerfile) |
 | `build-frontend.yaml` | OpenShift build for React/nginx |
 | `backend-deployment.yaml` | Quarkus deployment with DB + OIDC env vars and health probes |
 | `backend-service.yaml` / `backend-route.yaml` | API exposure |
-| `frontend-deployment.yaml` | React UI with Keycloak runtime config (proxies `/api` to backend) |
+| `frontend-deployment.yaml` | React UI with Keycloak runtime config (mounts nginx ConfigMap) |
 | `frontend-service.yaml` / `frontend-route.yaml` | UI exposure |
 
 Keycloak manifests live in `manifests/gitops/keycloak/` — see [Set up Keycloak](04b-setup-keycloak.md).
@@ -42,37 +44,23 @@ Keycloak manifests live in `manifests/gitops/keycloak/` — see [Set up Keycloak
 2. Runs `oc start-build --from-dir` with local source
 3. Points Deployments at `image-registry.openshift-image-registry.svc:5000/<namespace>/people-*:latest`
 
-Backend Dockerfile (`apps/people-service/backend/Dockerfile`) performs a multi-stage Maven + Quarkus build inside the cluster (Java 17).
+## OpenAPI
 
-The frontend container generates `/config.js` at startup from `KEYCLOAK_URL`, `KEYCLOAK_REALM`, and `KEYCLOAK_CLIENT_ID` environment variables.
+| Endpoint | Description |
+|----------|-------------|
+| `/q/openapi` | Live Quarkus OpenAPI (backend route) |
+| `/openapi.yaml` | Same spec via frontend nginx proxy |
+| `/openapi.json` | JSON representation via frontend proxy |
+
+The frontend header includes an **OpenAPI** link when OIDC is enabled.
 
 ## Manual validation
 
 ```bash
-source scripts/workshop.env
-KEYCLOAK_HOST=$(oc get route keycloak -o jsonpath='{.spec.host}')
-BACKEND=$(oc get route people-backend -o jsonpath='{.spec.host}')
-
-TOKEN=$(curl -sk -X POST "https://${KEYCLOAK_HOST}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token" \
-  -H 'Content-Type: application/x-www-form-urlencoded' \
-  -d "client_id=${KEYCLOAK_CLIENT_ID}" \
-  -d 'username=user' \
-  -d 'password=r3dh@t' \
-  -d 'grant_type=password' | jq -r .access_token)
-
-curl -sk "https://${BACKEND}/q/health" | jq .
-curl -sk -X POST "https://${BACKEND}/api/people" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H 'Content-Type: application/json' \
-  -d '{"firstName":"Grace","lastName":"Hopper","age":85}' | jq .
-curl -sk -H "Authorization: Bearer ${TOKEN}" "https://${BACKEND}/api/people" | jq .
-```
-
-Or run:
-
-```bash
 ./scripts/validate-workshop.sh
 ```
+
+Or test CRUD manually — see [08-validation](08-validation.md).
 
 Open the frontend route in a browser and sign in as `user` / `r3dh@t`.
 
@@ -82,8 +70,21 @@ Open the frontend route in a browser and sign in as `user` / `r3dh@t`.
 |------|-------------|
 | `apps/people-service/backend/` | Quarkus REST API with OIDC, Flyway migration, Panache entity |
 | `apps/people-service/frontend/` | React CRUD UI with Keycloak login |
+| `apps/people-service/openapi/people-api.yaml` | Static OpenAPI reference copy |
 | `apps/people-service/catalog-info.yaml` | Backstage component metadata for scaffolder output |
 
-## Argo CD
+## Repair
 
-When using Argo CD, sync `manifests/gitops/keycloak/` before or together with `manifests/gitops/people-app/`. Ensure rendered manifests include `OIDC_AUTH_SERVER_URL` pointing at your Keycloak route.
+If PostgreSQL, backend, or frontend stop working (common in shared dev namespaces):
+
+```bash
+./scripts/repair-people-app.sh
+```
+
+This also ensures Keycloak is running, applies `people-workshop-runtime` ConfigMap with concrete URLs, rebuilds the frontend image, and restarts the pod so `/config.js` is regenerated.
+
+**Note:** Argo CD excludes `*-deployment.yaml` and runtime ConfigMaps from auto-sync because Git manifests contain `${...}` placeholders that must be rendered with `envsubst` via the repair/bootstrap scripts.
+
+## Next step
+
+[Install OpenShift GitOps / Argo CD](05-setup-argocd.md) (optional) or [Install Developer Hub](06-install-developer-hub.md).

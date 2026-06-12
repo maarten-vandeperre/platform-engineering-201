@@ -1,0 +1,52 @@
+name: People Service CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/people-service/**'
+      - '.github/workflows/people-service-ci.yaml'
+  push:
+    branches: [main]
+    paths:
+      - 'apps/people-service/**'
+      - '.github/workflows/people-service-ci.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (Maven)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Build backend
+        working-directory: apps/people-service/backend
+        run: mvn -B -DskipTests package
+
+  frontend:
+    name: Frontend (Vite)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies and build
+        working-directory: apps/people-service/frontend
+        run: |
+          npm install
+          npm run build

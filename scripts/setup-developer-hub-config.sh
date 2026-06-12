@@ -9,13 +9,9 @@ echo "Configuring Developer Hub Keycloak SSO in ${RHDH_NAMESPACE}..."
 
 require_oc
 
-resolve_keycloak_urls
+ensure_workshop_platform
 
-if [[ -z "${KEYCLOAK_URL:-}" ]] && oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
-  KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")
-  export KEYCLOAK_URL="https://${KEYCLOAK_HOST}"
-  export OIDC_AUTH_SERVER_URL="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}"
-fi
+resolve_keycloak_urls
 
 "${SCRIPTS_DIR}/configure-keycloak-realm.sh"
 "${SCRIPTS_DIR}/setup-developer-hub-kubernetes.sh"
@@ -71,6 +67,8 @@ if [[ -z "${BACKEND_SECRET:-}" ]] && oc get secret redhat-developer-hub-auth -n 
 fi
 export BACKEND_SECRET="${BACKEND_SECRET:-workshop-backend-secret}"
 export GITHUB_TOKEN="${GITHUB_TOKEN:-changeme}"
+export AUTH_GITHUB_CLIENT_ID="${AUTH_GITHUB_CLIENT_ID:-changeme}"
+export AUTH_GITHUB_CLIENT_SECRET="${AUTH_GITHUB_CLIENT_SECRET:-changeme}"
 export ARGOCD_URL="${ARGOCD_URL:-changeme}"
 export ARGOCD_TOKEN="${ARGOCD_TOKEN:-changeme}"
 
@@ -98,6 +96,8 @@ CATALOG_URL="${CATALOG_URL:-${WORKSHOP_GIT_REPO}/blob/${WORKSHOP_GIT_BRANCH}/man
 
 oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
   --from-literal=GITHUB_TOKEN="${GITHUB_TOKEN:-changeme}" \
+  --from-literal=AUTH_GITHUB_CLIENT_ID="${AUTH_GITHUB_CLIENT_ID:-changeme}" \
+  --from-literal=AUTH_GITHUB_CLIENT_SECRET="${AUTH_GITHUB_CLIENT_SECRET:-changeme}" \
   --from-literal=ARGOCD_URL="${ARGOCD_URL:-changeme}" \
   --from-literal=ARGOCD_TOKEN="${ARGOCD_TOKEN:-changeme}" \
   --from-literal=RHDH_OIDC_CLIENT_SECRET="${RHDH_OIDC_CLIENT_SECRET}" \
@@ -105,7 +105,7 @@ oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
 
 render_app_config() {
   envsubst \
-    '${RHDH_APP_TITLE} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${CLUSTER_ROUTER_BASE} ${WORKSHOP_NAMESPACE} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${BACKEND_SECRET} ${POSTGRESQL_ADMIN_PASSWORD} ${K8S_CLUSTER_TOKEN}' \
+    '${RHDH_APP_TITLE} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${AUTH_GITHUB_CLIENT_ID} ${AUTH_GITHUB_CLIENT_SECRET} ${CLUSTER_ROUTER_BASE} ${WORKSHOP_NAMESPACE} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${BACKEND_SECRET} ${POSTGRESQL_ADMIN_PASSWORD} ${K8S_CLUSTER_TOKEN}' \
     <"${MANIFESTS_DIR}/developer-hub/app-config-rhdh.yaml" \
     | sed "s|PLACEHOLDER-RHDH-ROUTE|${RHDH_HOST}|g" \
     | sed "s|PLACEHOLDER-CATALOG-URL|${CATALOG_URL}|g" \
@@ -171,4 +171,14 @@ fi
 echo ""
 echo "Developer Hub: https://${RHDH_HOST}"
 echo "Sign in with Keycloak user ${RHDH_KEYCLOAK_USER} / (password from workshop.env)"
+
+if [[ "${AUTH_GITHUB_CLIENT_ID:-changeme}" == "changeme" ]] \
+  || [[ "${AUTH_GITHUB_CLIENT_SECRET:-changeme}" == "changeme" ]]; then
+  echo ""
+  echo "WARNING: GitHub OAuth is not configured (AUTH_GITHUB_CLIENT_ID/SECRET still 'changeme')."
+  echo "The CI tab Authorize GitHub popup will fail with GitHub 404 until you run:"
+  echo "  ./scripts/setup-github-oauth.sh"
+  echo "Callback URL: https://${RHDH_HOST}/api/auth/github/handler/frame"
+fi
+
 echo "Developer Hub configuration complete."

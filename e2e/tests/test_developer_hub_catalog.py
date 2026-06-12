@@ -5,7 +5,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from helpers import dismiss_onboarding, sign_in_via_rhdh_popup
+from helpers import dismiss_onboarding, open_entity_tab, sign_in_via_rhdh_popup
 
 
 def _wait_for_text(driver, timeout, *needles):
@@ -47,6 +47,42 @@ def test_developer_hub_api_catalog_listing(workshop_config, ready_stack, driver)
         "openapi",
     )
     assert "people" in entity_text.lower()
+
+
+@pytest.mark.e2e
+def test_developer_hub_api_github_actions_ci_tab(workshop_config, ready_stack, driver):
+    config = workshop_config
+    api_entity_url = (
+        f"{config['rhdh_url']}/catalog/default/api/{config['api_name']}"
+    )
+    ci_tab_url = f"{api_entity_url}/ci"
+
+    sign_in_via_rhdh_popup(driver, config, api_entity_url)
+    dismiss_onboarding(driver)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains(f"/api/{config['api_name']}")
+    )
+    overview_text = _wait_for_text(driver, config["timeout"], "People REST API")
+    assert "missing annotation" not in overview_text.lower()
+
+    if not open_entity_tab(driver, "ci", "CI"):
+        driver.get(ci_tab_url)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("/ci")
+    )
+    ci_text = _wait_for_text(driver, config["timeout"], "People REST API")
+    lowered = ci_text.lower()
+    assert "missing annotation" not in lowered
+    assert (
+        "workflow" in lowered
+        or "github" in lowered
+        or "no workflow" in lowered
+        or "actions" in lowered
+        or "people service ci" in lowered
+        or "build and push" in lowered
+    )
 
 
 @pytest.mark.e2e

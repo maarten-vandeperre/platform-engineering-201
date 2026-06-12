@@ -8,6 +8,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 echo "Updating Developer Hub catalog entities in ${WORKSHOP_NAMESPACE}..."
 
 require_oc
+ensure_workshop_platform
 
 if [[ -z "${KEYCLOAK_URL:-}" ]] && oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
   KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")
@@ -78,6 +79,7 @@ if [[ -n "${RHDH_HOST}" ]]; then
   echo "Developer Hub catalog APIs: https://${RHDH_HOST}/catalog?filters%5Bkind%5D=api"
   echo "Developer Hub Tech Radar: https://${RHDH_HOST}/tech-radar"
   echo "People REST API entity: https://${RHDH_HOST}/catalog/default/api/people-rest-api"
+  echo "People REST API CI tab: https://${RHDH_HOST}/catalog/default/api/people-rest-api/ci"
 fi
 
 echo "Catalog configuration complete."

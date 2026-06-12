@@ -1,6 +1,25 @@
 # 7. Catalog, template, and integrations
 
-Developer Hub loads catalog data from this Git repository.
+Developer Hub loads catalog data from a **workshop catalog server** in your namespace and from inline ConfigMap entities.
+
+## Apply catalog configuration
+
+```bash
+./scripts/configure-developer-hub-catalog.sh
+./scripts/setup-developer-hub-config.sh
+```
+
+This script:
+
+1. Creates/updates ConfigMap `workshop-catalog-entities` (entities, OpenAPI file, Tech Radar JSON)
+2. Deploys `workshop-catalog-server` (Python HTTP server on a Route)
+3. Restarts Developer Hub to reload catalog locations
+
+Catalog server URLs:
+
+- `https://workshop-catalog-server-<namespace>.<router>/entities.yaml`
+- `https://workshop-catalog-server-<namespace>.<router>/people-api.yaml`
+- `https://workshop-catalog-server-<namespace>.<router>/tech-radar.json`
 
 ## Catalog location
 
@@ -9,17 +28,22 @@ Configured in `app-config-rhdh.yaml`:
 ```yaml
 catalog:
   locations:
+    - type: file
+      target: /catalog/entities.yaml
     - type: url
-      target: https://github.com/<org>/platform-engineering-201/blob/main/manifests/gitops/catalog/all.yaml
+      target: https://workshop-catalog-server-<namespace>.<router>/entities.yaml
 ```
 
 ## Entities (`manifests/gitops/catalog/`)
 
 | File | Kind | Purpose |
 |------|------|---------|
-| `all.yaml` | Location | Imports entities and templates |
-| `entities/people-service.yaml` | System + Component | Registers the demo app in the catalog |
-| `templates/quarkus-react-postgres-template.yaml` | Template | Scaffolder template to clone the app pattern |
+| `all.yaml` | Location | Imports entities and templates (Git-hosted catalog) |
+| `entities/people-service.yaml` | System + Component | Registers the demo app |
+| `entities/people-api.yaml` | API | People REST API (OpenAPI from live backend) |
+| `openapi/people-api.yaml` | — | Static OpenAPI reference served by catalog server |
+| `tech-radar.json` | — | Technology Radar data |
+| `templates/quarkus-react-postgres-template.yaml` | Template | Scaffolder template |
 
 ### Component annotations
 
@@ -32,25 +56,41 @@ catalog:
 
 ### API catalog and OpenAPI
 
-The **People REST API** is registered as a catalog `API` entity (`people-rest-api`). Its definition is loaded from the live Quarkus endpoint:
+The **People REST API** (`people-rest-api`) is linked from the `people-service` component via `providesApis`.
 
-- Backend: `https://people-backend-<namespace>.<router>/q/openapi`
-- Frontend proxy: `https://people-frontend-<namespace>.<router>/openapi.yaml`
+| Annotation | Integration |
+|------------|-------------|
+| `github.com/project-slug` | GitHub Actions plugin — **CI** tab on the API entity page |
+| `backstage.io/source-location` | Links the API to `apps/people-service` in GitHub |
 
-Refresh catalog data after changes:
+| Endpoint | Description |
+|----------|-------------|
+| Backend `/q/openapi` | Live Quarkus spec (used as catalog API definition) |
+| Frontend `/openapi.yaml` | Same spec via nginx proxy |
+| Catalog server `/people-api.yaml` | Static reference copy |
 
-```bash
-./scripts/configure-developer-hub-catalog.sh
-./scripts/setup-developer-hub-config.sh
-```
+In Developer Hub: **Catalog → APIs** or `/catalog?filters[kind]=api`.
 
-In Developer Hub open **Catalog → APIs** or visit `/catalog?filters[kind]=api`.
+Component API tab: `/catalog/default/component/people-service/api`.
+
+People REST API CI tab (GitHub Actions workflow runs): `/catalog/default/api/people-rest-api/ci`.
 
 ### Technology Radar
 
-Workshop technologies (Quarkus, React, PostgreSQL, OpenShift, Keycloak, Argo CD, Developer Hub) are published in `manifests/gitops/catalog/tech-radar.json` and served by the workshop catalog server. Enable the Tech Radar plugins in `dynamic-plugins-rhdh.yaml` and configure `techRadar.url` in `app-config-rhdh.yaml`.
+Plugins enabled in `dynamic-plugins-rhdh.yaml`:
 
-After changing catalog files, push to Git and refresh the catalog in Developer Hub (**Catalog → Register existing component** or wait for refresh interval).
+- `oci://ghcr.io/.../backstage-community-plugin-github-actions` — CI tab with workflow runs
+- `backstage-community-plugin-tech-radar`
+- `backstage-community-plugin-tech-radar-backend-dynamic`
+
+Data source in `app-config-rhdh.yaml`:
+
+```yaml
+techRadar:
+  url: https://workshop-catalog-server-<namespace>.<router>/tech-radar.json
+```
+
+Open **Tech Radar** in the sidebar or visit `/tech-radar`.
 
 ## Software template
 
@@ -64,27 +104,85 @@ The template:
 
 ## GitHub Actions integration
 
-Workflow: `.github/workflows/build-and-push.yaml`
+Workflows:
 
-- Triggers on push to `main` under `apps/people-service/`
-- Builds backend with Maven + Quarkus
-- Builds frontend with Node + Docker
-- Pushes to GitHub Container Registry
+| Workflow | File | Purpose |
+|----------|------|---------|
+| People Service CI | `.github/workflows/people-service-ci.yaml` | Maven + Vite build on PR/push |
+| Build and Push Container Images | `.github/workflows/build-and-push.yaml` | Publish images to GHCR on `main` |
 
-Ensure `GITHUB_TOKEN` in `app-secrets-rhdh` has permission to read workflow runs for your repository.
+The **CI** tab on the **People REST API** entity (`people-rest-api`) reads workflow runs via the GitHub Actions plugin. The API entity must include:
+
+```yaml
+metadata:
+  annotations:
+    github.com/project-slug: <org>/<repo>
+```
+
+Set `GITHUB_TOKEN` in `scripts/workshop.env` (and `app-secrets-rhdh`) to a GitHub PAT with `repo` and `workflow` read scopes so Developer Hub can list workflow runs.
+
+The CI tab also prompts for **Authorize GitHub** (separate from Keycloak sign-in). Register a GitHub OAuth App and set:
+
+```bash
+export AUTH_GITHUB_CLIENT_ID="..."
+export AUTH_GITHUB_CLIENT_SECRET="..."
+```
+
+OAuth callback URL:
+
+```text
+https://redhat-developer-hub-<namespace>.<router>/api/auth/github/handler/frame
+```
+
+Then re-run `./scripts/setup-developer-hub-config.sh`, or use the helper script:
+
+```bash
+./scripts/create-github-oauth-app.sh --oauth-app
+```
+
+That opens GitHub, saves `AUTH_GITHUB_CLIENT_ID` / `AUTH_GITHUB_CLIENT_SECRET` to `scripts/workshop.env`, applies Developer Hub config, and prints the OAuth App settings URL (`https://github.com/settings/applications/<client_id>`).
+
+Fully automated alternative (GitHub App manifest flow):
+
+```bash
+./scripts/create-github-oauth-app.sh
+```
+
+### Reusing an existing OAuth App
+
+| Goal | Command |
+|------|---------|
+| Re-apply existing credentials to Developer Hub | `./scripts/setup-github-oauth.sh` |
+| First-time setup or new credentials | `./scripts/create-github-oauth-app.sh --oauth-app` |
+
+Notes:
+
+- Scripts **never delete** OAuth Apps on GitHub.
+- Re-running `create-github-oauth-app.sh --oauth-app` opens the registration form again; paste existing Client ID/secret to reuse, or register only if you want a new app.
+- Re-running the default manifest flow and clicking **Create** adds a **second** GitHub App; the old one remains.
+- Lost client secret? Generate a new one in GitHub app settings, update `workshop.env`, then `./scripts/setup-github-oauth.sh`.
+
+OAuth App settings URL:
+
+```text
+https://github.com/settings/applications/<client_id>
+```
 
 ## Argo CD integration
 
 The **CD** tab shows sync status when:
 
 1. Argo CD Application `people-service` exists
-2. `argo-secrets` contains a valid token
+2. `argo-secrets` contains a valid token (`./scripts/setup-argocd-token.sh`)
 3. Component annotation `argocd/app-name` matches the Application name
 
 ## Customize for your fork
 
-Update these files after forking:
-
 1. `manifests/gitops/catalog/entities/people-service.yaml` — GitHub slug and links
-2. `scripts/workshop.env` — git repo URL and namespace
-3. Re-run `./scripts/setup-developer-hub-config.sh`
+2. `manifests/gitops/catalog/entities/people-api.yaml` — GitHub slug for API CI tab
+3. `scripts/workshop.env` — git repo URL, namespace, `CLUSTER_ROUTER_BASE`, `GITHUB_TOKEN`
+3. Re-run `./scripts/configure-developer-hub-catalog.sh` and `./scripts/setup-developer-hub-config.sh`
+
+## Next step
+
+[Validation and troubleshooting](08-validation.md)

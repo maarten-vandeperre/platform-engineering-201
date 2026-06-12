@@ -1,23 +1,40 @@
 #!/bin/sh
 set -eu
 
-KEYCLOAK_URL="${KEYCLOAK_URL:-}"
+WORKSHOP_NAMESPACE="${WORKSHOP_NAMESPACE:-}"
+CLUSTER_ROUTER_BASE="${CLUSTER_ROUTER_BASE:-}"
 KEYCLOAK_REALM="${KEYCLOAK_REALM:-workshop}"
 KEYCLOAK_CLIENT_ID="${KEYCLOAK_CLIENT_ID:-people-service}"
 OIDC_ENABLED="${OIDC_ENABLED:-true}"
-WORKSHOP_NAMESPACE="${WORKSHOP_NAMESPACE:-}"
-CLUSTER_ROUTER_BASE="${CLUSTER_ROUTER_BASE:-}"
 
-if [ -z "${KEYCLOAK_URL}" ] || printf '%s' "${KEYCLOAK_URL}" | grep -q '\$'; then
-  if [ -n "${WORKSHOP_NAMESPACE}" ] && [ -n "${CLUSTER_ROUTER_BASE}" ]; then
-    KEYCLOAK_URL="https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
-  else
-    KEYCLOAK_URL="http://localhost:8180"
-  fi
+contains_placeholder() {
+  case "$1" in
+    *'$'*|*'${'* ) return 0 ;;
+    '' ) return 0 ;;
+    * ) return 1 ;;
+  esac
+}
+
+if contains_placeholder "${WORKSHOP_NAMESPACE}"; then
+  WORKSHOP_NAMESPACE=""
 fi
 
-if [ -z "${KEYCLOAK_REALM}" ] || printf '%s' "${KEYCLOAK_REALM}" | grep -q '\$'; then
+if contains_placeholder "${CLUSTER_ROUTER_BASE}"; then
+  CLUSTER_ROUTER_BASE=""
+fi
+
+if contains_placeholder "${KEYCLOAK_REALM}"; then
   KEYCLOAK_REALM="workshop"
+fi
+
+if contains_placeholder "${KEYCLOAK_CLIENT_ID}"; then
+  KEYCLOAK_CLIENT_ID="people-service"
+fi
+
+if [ -n "${WORKSHOP_NAMESPACE}" ] && [ -n "${CLUSTER_ROUTER_BASE}" ]; then
+  KEYCLOAK_URL="https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
+else
+  KEYCLOAK_URL="http://localhost:8180"
 fi
 
 case "${OIDC_ENABLED}" in

@@ -6,6 +6,7 @@ on:
     paths:
       - 'apps/people-service/**'
       - '.github/workflows/build-and-push.yaml'
+      - '.github/workflows/people-service-ci.yaml'
   workflow_dispatch:
 
 env:

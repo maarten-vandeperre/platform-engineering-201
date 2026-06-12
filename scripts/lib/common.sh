@@ -45,6 +45,26 @@ export RHDH_KEYCLOAK_USER
 export RHDH_KEYCLOAK_PASSWORD
 export RHDH_OIDC_CLIENT_SECRET
 export WORKSHOP_CATALOG_URL
+export WORKSHOP_INSTALL_METHOD
+export SKIP_ARGOCD
+export RUN_E2E
+
+detect_cluster_router_base() {
+  if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+    return 0
+  fi
+  local host=""
+  host=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
+  if [[ -z "${host}" ]]; then
+    host=$(oc get route -n openshift-console -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
+  fi
+  if [[ -n "${host}" && "${host}" == console-openshift-console.* ]]; then
+    export CLUSTER_ROUTER_BASE="${host#console-openshift-console.}"
+    echo "Detected CLUSTER_ROUTER_BASE=${CLUSTER_ROUTER_BASE}"
+  elif [[ -z "${CLUSTER_ROUTER_BASE:-}" ]]; then
+    echo "Set CLUSTER_ROUTER_BASE in scripts/workshop.env (e.g. apps.cluster-name.example.com)" >&2
+  fi
+}
 
 require_oc() {
   command -v oc >/dev/null 2>&1 || {
@@ -107,6 +127,12 @@ get_route_host() {
   oc get route "${name}" -n "${namespace}" -o jsonpath='{.spec.host}'
 }
 
+resolve_rhdh_host() {
+  get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null \
+    || get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null \
+    || echo "redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
+}
+
 resolve_keycloak_urls() {
   if [[ -z "${KEYCLOAK_URL:-}" || "${KEYCLOAK_URL}" == *'${'* ]]; then
     if oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
@@ -117,4 +143,86 @@ resolve_keycloak_urls() {
     fi
   fi
   export OIDC_AUTH_SERVER_URL="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}"
+}
+
+wait_keycloak_http_ready() {
+  resolve_keycloak_urls
+  local url="${OIDC_AUTH_SERVER_URL}/.well-known/openid-configuration"
+  local attempt code
+  for attempt in $(seq 1 60); do
+    code=$(curl -sk -o /tmp/workshop-keycloak-check.json -w "%{http_code}" "${url}" 2>/dev/null || echo "000")
+    if [[ "${code}" == "200" ]] && grep -q '"issuer"' /tmp/workshop-keycloak-check.json 2>/dev/null; then
+      return 0
+    fi
+    if (( attempt % 6 == 0 )); then
+      echo "Waiting for Keycloak at ${url} (HTTP ${code})..."
+    fi
+    sleep 5
+  done
+  echo "Keycloak is not reachable. Run ./scripts/repair-keycloak.sh" >&2
+  return 1
+}
+
+ensure_keycloak_running() {
+  if ! oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local replicas ready
+  replicas=$(oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" -o jsonpath='{.spec.replicas}')
+  ready=$(oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+
+  if [[ "${replicas}" == "0" || "${ready}" != "1" ]]; then
+    echo "Ensuring Keycloak is running in ${WORKSHOP_NAMESPACE} (replicas=${replicas}, ready=${ready})..."
+    oc scale deployment/keycloak --replicas=1 -n "${WORKSHOP_NAMESPACE}"
+    oc rollout status deployment/keycloak -n "${WORKSHOP_NAMESPACE}" --timeout=600s
+  fi
+
+  wait_keycloak_http_ready
+}
+
+ensure_rhdh_postgres() {
+  if ! oc get statefulset redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local replicas ready
+  replicas=$(oc get statefulset redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" \
+    -o jsonpath='{.spec.replicas}')
+  ready=$(oc get statefulset redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+
+  if [[ "${replicas}" == "0" || "${ready}" != "1" ]]; then
+    echo "Ensuring RHDH PostgreSQL is running in ${RHDH_NAMESPACE}..."
+    oc scale statefulset/redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" --replicas=1
+    oc rollout status statefulset/redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" --timeout=300s
+  fi
+}
+
+ensure_catalog_server() {
+  if ! oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local replicas ready
+  replicas=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.spec.replicas}')
+  ready=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+
+  if [[ "${replicas}" == "0" || "${ready}" != "1" ]]; then
+    echo "Ensuring workshop catalog server is running in ${WORKSHOP_NAMESPACE}..."
+    oc scale deployment/workshop-catalog-server --replicas=1 -n "${WORKSHOP_NAMESPACE}"
+    oc rollout status deployment/workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" --timeout=300s
+  fi
+}
+
+ensure_workshop_platform() {
+  require_oc
+  echo "Ensuring workshop platform dependencies are running..."
+  ensure_keycloak_running
+  ensure_rhdh_postgres
+  ensure_catalog_server
+  echo "Workshop platform dependencies are ready."
 }

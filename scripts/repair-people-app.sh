@@ -20,6 +20,7 @@ for file in postgres-secret.yaml postgres-pvc.yaml postgres-deployment.yaml post
 done
 
 render_manifest "${MANIFESTS_DIR}/people-app/frontend-nginx-configmap.yaml" | oc apply -f -
+render_manifest "${MANIFESTS_DIR}/people-app/workshop-runtime-config.yaml" | oc apply -f -
 
 echo "Ensuring PostgreSQL is running..."
 oc scale deployment/people-postgres --replicas=1 -n "${WORKSHOP_NAMESPACE}"
@@ -51,19 +52,14 @@ for file in backend-deployment.yaml frontend-deployment.yaml; do
   render_manifest "${MANIFESTS_DIR}/people-app/${file}" | oc apply -f -
 done
 
-resolve_keycloak_urls
-oc set env deployment/people-frontend -n "${WORKSHOP_NAMESPACE}" \
-  WORKSHOP_NAMESPACE="${WORKSHOP_NAMESPACE}" \
-  CLUSTER_ROUTER_BASE="${CLUSTER_ROUTER_BASE}" \
-  KEYCLOAK_URL="${KEYCLOAK_URL}" \
-  KEYCLOAK_REALM="${KEYCLOAK_REALM}" \
-  KEYCLOAK_CLIENT_ID="${KEYCLOAK_CLIENT_ID}" \
-  OIDC_ENABLED="${OIDC_ENABLED}" \
-  --overwrite
+if [[ "${REBUILD_FRONTEND:-true}" == "true" ]]; then
+  echo "Rebuilding frontend image (runtime-config + auth fixes)..."
+  "${SCRIPTS_DIR}/build-images-openshift.sh" --frontend-only
+fi
+
+render_manifest "${MANIFESTS_DIR}/people-app/workshop-runtime-config.yaml" | oc apply -f -
 oc set env deployment/people-backend -n "${WORKSHOP_NAMESPACE}" \
   OIDC_AUTH_SERVER_URL="${OIDC_AUTH_SERVER_URL}" \
-  OIDC_ENABLED="${OIDC_ENABLED}" \
-  OIDC_CLIENT_ID="${KEYCLOAK_CLIENT_ID}" \
   --overwrite
 
 echo "Ensuring application deployments are running..."
@@ -73,6 +69,8 @@ oc scale deployment/people-frontend --replicas=1 -n "${WORKSHOP_NAMESPACE}"
 echo "Waiting for backend..."
 oc rollout status deployment/people-backend -n "${WORKSHOP_NAMESPACE}" --timeout=600s
 echo "Waiting for frontend..."
+oc rollout status deployment/people-frontend -n "${WORKSHOP_NAMESPACE}" --timeout=300s
+oc rollout restart deployment/people-frontend -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1 || true
 oc rollout status deployment/people-frontend -n "${WORKSHOP_NAMESPACE}" --timeout=300s
 
 "${SCRIPTS_DIR}/validate-workshop.sh"

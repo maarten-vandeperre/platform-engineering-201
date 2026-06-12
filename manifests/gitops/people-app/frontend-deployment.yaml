@@ -32,19 +32,14 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: people-workshop-runtime
           env:
             - name: WORKSHOP_NAMESPACE
-              value: "${WORKSHOP_NAMESPACE}"
-            - name: CLUSTER_ROUTER_BASE
-              value: "${CLUSTER_ROUTER_BASE}"
-            - name: KEYCLOAK_URL
-              value: "https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
-            - name: KEYCLOAK_REALM
-              value: "${KEYCLOAK_REALM}"
-            - name: KEYCLOAK_CLIENT_ID
-              value: "${KEYCLOAK_CLIENT_ID}"
-            - name: OIDC_ENABLED
-              value: "${OIDC_ENABLED}"
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
           readinessProbe:
             httpGet:
               path: /

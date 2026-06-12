@@ -1,7 +1,8 @@
 import Keycloak from 'keycloak-js';
+import { resolveRuntimeConfig } from './runtime-config.js';
 
-const config = window.__RUNTIME_CONFIG__ || {};
-const oidcEnabled = config.oidcEnabled !== false && config.oidcEnabled !== 'false';
+const config = resolveRuntimeConfig();
+const oidcEnabled = config.oidcEnabled;
 
 let keycloak;
 
@@ -16,8 +17,8 @@ export async function initAuth() {
 
   keycloak = new Keycloak({
     url: config.keycloakUrl,
-    realm: config.keycloakRealm || 'workshop',
-    clientId: config.keycloakClientId || 'people-service',
+    realm: config.keycloakRealm,
+    clientId: config.keycloakClientId,
   });
 
   const authenticated = await keycloak.init({

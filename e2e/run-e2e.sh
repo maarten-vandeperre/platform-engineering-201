@@ -22,5 +22,11 @@ export KEYCLOAK_URL="${KEYCLOAK_URL:-https://keycloak-${WORKSHOP_NAMESPACE}.${CL
 export E2E_HEADLESS="${E2E_HEADLESS:-true}"
 export E2E_TIMEOUT_SECONDS="${E2E_TIMEOUT_SECONDS:-180}"
 
+if command -v oc >/dev/null 2>&1; then
+  # shellcheck disable=SC1091
+  source "${REPO_ROOT}/scripts/lib/common.sh"
+  ensure_workshop_platform
+fi
+
 python3 -m pip install -q -r "${SCRIPT_DIR}/requirements.txt"
 python3 -m pytest "${SCRIPT_DIR}/tests" -m e2e "$@"

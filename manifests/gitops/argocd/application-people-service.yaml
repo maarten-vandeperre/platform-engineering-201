@@ -1,0 +1,25 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ${ARGOCD_APP_NAME}
+  namespace: ${GITOPS_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: people-service
+spec:
+  project: default
+  source:
+    repoURL: ${WORKSHOP_GIT_REPO}
+    targetRevision: ${WORKSHOP_GIT_BRANCH}
+    path: manifests/gitops/people-app
+    directory:
+      include: '*.yaml'
+      exclude: 'build-*.yaml|*-deployment.yaml|frontend-nginx-configmap.yaml|workshop-runtime-config.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ${WORKSHOP_NAMESPACE}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

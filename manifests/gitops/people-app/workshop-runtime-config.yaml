@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: people-workshop-runtime
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: people-service
+data:
+  CLUSTER_ROUTER_BASE: "${CLUSTER_ROUTER_BASE}"
+  KEYCLOAK_REALM: "${KEYCLOAK_REALM}"
+  KEYCLOAK_CLIENT_ID: "${KEYCLOAK_CLIENT_ID}"
+  OIDC_CLIENT_ID: "${KEYCLOAK_CLIENT_ID}"
+  OIDC_ENABLED: "${OIDC_ENABLED}"
+  OIDC_AUTH_SERVER_URL: "https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/realms/${KEYCLOAK_REALM}"
