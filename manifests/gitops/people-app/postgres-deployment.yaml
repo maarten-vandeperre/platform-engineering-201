@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: people-postgres
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app: people-postgres
+    app.kubernetes.io/part-of: people-service
+    app.openshift.io/runtime: postgres
+    backstage.io/kubernetes-id: people-service
+  annotations:
+    argocd/app-name: ${ARGOCD_APP_NAME}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: people-postgres
+  template:
+    metadata:
+      labels:
+        app: people-postgres
+        app.kubernetes.io/part-of: people-service
+        app.openshift.io/runtime: postgres
+        backstage.io/kubernetes-id: people-service
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          envFrom:
+            - secretRef:
+                name: people-postgres
+          env:
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          startupProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            failureThreshold: 30
+            periodSeconds: 5
+          readinessProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            exec:
+              command: [sh, -c, 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"']
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: people-postgres-data

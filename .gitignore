@@ -22,3 +22,20 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+# Workshop local config (may contain tokens)
+scripts/workshop.env
+
+# Java / Node
+**/target/
+**/node_modules/
+**/dist/
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+/.idea/
+/.prompts/
+
+# E2E
+e2e/.pytest_cache/
+e2e/**/__pycache__/

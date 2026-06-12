@@ -1,0 +1,17 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: people-frontend
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: people-service
+spec:
+  output:
+    to:
+      kind: ImageStreamTag
+      name: people-frontend:latest
+  source:
+    type: Binary
+  strategy:
+    type: Docker
+  triggers: []

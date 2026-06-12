@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/common.sh"
+
+echo "Validating People Service deployment in ${WORKSHOP_NAMESPACE}..."
+
+require_oc
+command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
+
+BACKEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-backend")
+FRONTEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-frontend")
+
+if [[ -z "${KEYCLOAK_URL:-}" ]]; then
+  if oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    KEYCLOAK_URL="https://$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")"
+  fi
+fi
+
+echo "== Backend health (unauthenticated) =="
+curl -sk "https://${BACKEND_HOST}/q/health" | jq .
+
+echo "== Backend readiness (database) =="
+READY=$(curl -sk "https://${BACKEND_HOST}/q/health/ready")
+echo "${READY}" | jq .
+if [[ "$(echo "${READY}" | jq -r '.status // empty')" != "UP" ]]; then
+  echo "Backend is not ready. Run ./scripts/repair-people-app.sh" >&2
+  exit 1
+fi
+
+echo "== PostgreSQL pod =="
+oc get pods -n "${WORKSHOP_NAMESPACE}" -l app=people-postgres -o wide
+POSTGRES_READY=$(oc get pods -n "${WORKSHOP_NAMESPACE}" -l app=people-postgres \
+  -o jsonpath='{.items[0].status.containerStatuses[0].ready}' 2>/dev/null || echo false)
+if [[ "${POSTGRES_READY}" != "true" ]]; then
+  echo "PostgreSQL pod is not ready. Run ./scripts/repair-people-app.sh" >&2
+  exit 1
+fi
+
+if [[ "${OIDC_ENABLED}" == "true" && -n "${KEYCLOAK_URL:-}" ]]; then
+  echo "== Keycloak token for workshop user =="
+  TOKEN_RESPONSE=$(curl -sk -X POST "${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token" \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d "client_id=${KEYCLOAK_CLIENT_ID}" \
+    -d 'username=user' \
+    -d 'password=r3dh@t' \
+    -d 'grant_type=password')
+  echo "${TOKEN_RESPONSE}" | jq '{token_type, expires_in, scope}'
+  ACCESS_TOKEN=$(echo "${TOKEN_RESPONSE}" | jq -r '.access_token')
+
+  if [[ -z "${ACCESS_TOKEN}" || "${ACCESS_TOKEN}" == "null" ]]; then
+    echo "Failed to obtain access token from Keycloak" >&2
+    exit 1
+  fi
+
+  echo "== Unauthenticated API call should fail =="
+  curl -sk -o /dev/null -w "HTTP %{http_code}\n" "https://${BACKEND_HOST}/api/people"
+
+  echo "== Create person (authenticated) =="
+  CREATE=$(curl -sk -X POST "https://${BACKEND_HOST}/api/people" \
+    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+    -H 'Content-Type: application/json' \
+    -d '{"firstName":"Ada","lastName":"Lovelace","age":36}')
+  echo "${CREATE}" | jq .
+  PERSON_ID=$(echo "${CREATE}" | jq -r '.id')
+
+  echo "== List people (authenticated) =="
+  curl -sk -H "Authorization: Bearer ${ACCESS_TOKEN}" "https://${BACKEND_HOST}/api/people" | jq .
+
+  echo "== Delete person ${PERSON_ID} (authenticated) =="
+  curl -sk -o /dev/null -w "HTTP %{http_code}\n" -X DELETE \
+    -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+    "https://${BACKEND_HOST}/api/people/${PERSON_ID}"
+else
+  echo "== Create person (OIDC disabled) =="
+  CREATE=$(curl -sk -X POST "https://${BACKEND_HOST}/api/people" \
+    -H 'Content-Type: application/json' \
+    -d '{"firstName":"Ada","lastName":"Lovelace","age":36}')
+  echo "${CREATE}" | jq .
+  PERSON_ID=$(echo "${CREATE}" | jq -r '.id')
+
+  echo "== List people =="
+  curl -sk "https://${BACKEND_HOST}/api/people" | jq .
+
+  echo "== Delete person ${PERSON_ID} =="
+  curl -sk -o /dev/null -w "HTTP %{http_code}\n" -X DELETE "https://${BACKEND_HOST}/api/people/${PERSON_ID}"
+fi
+
+echo "== Frontend runtime config =="
+CONFIG_JS=$(curl -sk "https://${FRONTEND_HOST}/config.js")
+echo "${CONFIG_JS}"
+if echo "${CONFIG_JS}" | grep -q '\${'; then
+  echo "Frontend config.js contains unresolved placeholders. Run ./scripts/repair-people-app.sh" >&2
+  exit 1
+fi
+
+echo "== Frontend homepage =="
+curl -sk -o /dev/null -w "HTTP %{http_code}\n" "https://${FRONTEND_HOST}/"
+
+if [[ -n "${KEYCLOAK_URL:-}" ]]; then
+  echo "== Keycloak readiness =="
+  curl -sk -o /dev/null -w "HTTP %{http_code}\n" "${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}"
+
+  RHDH_HOST="${RHDH_HOST:-redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}}"
+  AUTH_URL="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth?client_id=${RHDH_KEYCLOAK_CLIENT_ID}&response_type=code&scope=openid&redirect_uri=https%3A%2F%2F${RHDH_HOST}%2Fapi%2Fauth%2Foidc%2Fhandler%2Fframe"
+  echo "== Developer Hub OIDC client in Keycloak =="
+  AUTH_HEAD=$(curl -sk "${AUTH_URL}" | head -40)
+  if echo "${AUTH_HEAD}" | grep -qi 'client not found'; then
+    echo "Keycloak client '${RHDH_KEYCLOAK_CLIENT_ID}' is missing. Run ./scripts/configure-keycloak-realm.sh" >&2
+    exit 1
+  fi
+  if ! echo "${AUTH_HEAD}" | grep -Eiq 'invalid parameter: redirect_uri|username|sign in|log in|password|login-pf'; then
+    echo "Unexpected Keycloak auth response for client '${RHDH_KEYCLOAK_CLIENT_ID}'" >&2
+    exit 1
+  fi
+  echo "OIDC client ${RHDH_KEYCLOAK_CLIENT_ID} is registered"
+
+  echo "== Keycloak token for Developer Hub user (${RHDH_KEYCLOAK_USER}) =="
+  DEVHUB_TOKEN=$(curl -sk -X POST "${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token" \
+    -H 'Content-Type: application/x-www-form-urlencoded' \
+    -d "client_id=${RHDH_KEYCLOAK_CLIENT_ID}" \
+    -d "client_secret=${RHDH_OIDC_CLIENT_SECRET}" \
+    -d "username=${RHDH_KEYCLOAK_USER}" \
+    -d "password=${RHDH_KEYCLOAK_PASSWORD}" \
+    -d 'grant_type=password')
+  echo "${DEVHUB_TOKEN}" | jq '{token_type, expires_in}'
+  if [[ "$(echo "${DEVHUB_TOKEN}" | jq -r '.access_token // empty')" == "" ]]; then
+    echo "Failed to obtain Developer Hub user token from Keycloak" >&2
+    exit 1
+  fi
+
+  if oc get route redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub")
+    echo "== Developer Hub OIDC redirect to Keycloak =="
+    curl -sk -o /dev/null -w "HTTP %{http_code}\n" \
+      "https://${RHDH_HOST}/api/auth/oidc/start?env=production"
+  fi
+fi
+
+echo ""
+echo "OpenShift resources:"
+oc get deploy,svc,route,pvc -n "${WORKSHOP_NAMESPACE}" -l app.kubernetes.io/part-of=people-service
+
+echo ""
+echo "Validation complete."

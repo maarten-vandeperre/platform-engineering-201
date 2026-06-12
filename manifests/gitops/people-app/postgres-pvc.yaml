@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: people-postgres-data
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app: people-postgres
+    app.kubernetes.io/part-of: people-service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

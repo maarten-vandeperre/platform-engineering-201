@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: people-frontend
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app: people-frontend
+    app.kubernetes.io/part-of: people-service
+    app.openshift.io/runtime: nodejs
+    backstage.io/kubernetes-id: people-service
+  annotations:
+    argocd/app-name: ${ARGOCD_APP_NAME}
+    app.openshift.io/vcs-uri: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
+    app.openshift.io/vcs-ref: ${WORKSHOP_GIT_BRANCH}
+    app.openshift.io/connects-to: '[{"apiVersion":"v1","kind":"Service","name":"people-backend"}]'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: people-frontend
+  template:
+    metadata:
+      labels:
+        app: people-frontend
+        app.kubernetes.io/part-of: people-service
+        app.openshift.io/runtime: nodejs
+        backstage.io/kubernetes-id: people-service
+    spec:
+      containers:
+        - name: frontend
+          image: ${WORKSHOP_FRONTEND_IMAGE}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: WORKSHOP_NAMESPACE
+              value: "${WORKSHOP_NAMESPACE}"
+            - name: CLUSTER_ROUTER_BASE
+              value: "${CLUSTER_ROUTER_BASE}"
+            - name: KEYCLOAK_URL
+              value: "https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
+            - name: KEYCLOAK_REALM
+              value: "${KEYCLOAK_REALM}"
+            - name: KEYCLOAK_CLIENT_ID
+              value: "${KEYCLOAK_CLIENT_ID}"
+            - name: OIDC_ENABLED
+              value: "${OIDC_ENABLED}"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10

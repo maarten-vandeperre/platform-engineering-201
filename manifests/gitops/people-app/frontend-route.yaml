@@ -1,0 +1,16 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: people-frontend
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app: people-frontend
+    app.kubernetes.io/part-of: people-service
+spec:
+  to:
+    kind: Service
+    name: people-frontend
+  port:
+    targetPort: http
+  tls:
+    termination: edge

@@ -1,0 +1,155 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workshop-catalog-entities
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+data:
+  entities.yaml: |
+    apiVersion: backstage.io/v1alpha1
+    kind: Group
+    metadata:
+      name: guests
+      title: Workshop Team
+      description: Default owner group for workshop catalog entities.
+    spec:
+      type: team
+      children: []
+    ---
+    apiVersion: backstage.io/v1alpha1
+    kind: System
+    metadata:
+      name: people-platform
+      title: People Platform
+      description: Workshop system demonstrating Quarkus, PostgreSQL, React, GitOps, Keycloak, and Developer Hub.
+    spec:
+      owner: guests
+    ---
+    apiVersion: backstage.io/v1alpha1
+    kind: Component
+    metadata:
+      name: people-service
+      title: People Service
+      description: CRUD API and UI for Person records (first name, last name, age) secured with Keycloak.
+      annotations:
+        backstage.io/view-url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
+        backstage.io/edit-url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/edit/${WORKSHOP_GIT_BRANCH}/manifests/gitops/catalog/entities/people-service.yaml
+        github.com/project-slug: ${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
+        argocd/app-name: ${ARGOCD_APP_NAME}
+        backstage.io/kubernetes-id: people-service
+        backstage.io/kubernetes-cluster: openshift
+        backstage.io/kubernetes-label-selector: app.kubernetes.io/part-of=people-service
+        backstage.io/kubernetes-namespace: ${WORKSHOP_NAMESPACE}
+        app.openshift.io/vcs-uri: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
+        app.openshift.io/vcs-ref: ${WORKSHOP_GIT_BRANCH}
+      tags:
+        - java
+        - quarkus
+        - react
+        - postgres
+        - openshift
+        - keycloak
+      links:
+        - url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service
+          title: Source code
+          icon: github
+        - url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/actions
+          title: GitHub Actions
+          icon: github
+        - url: ${KEYCLOAK_URL}
+          title: Keycloak
+          icon: user
+        - url: https://people-frontend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}
+          title: People UI
+          icon: web
+        - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/api/people
+          title: People API
+          icon: web
+    spec:
+      type: service
+      lifecycle: production
+      owner: guests
+      system: people-platform
+      providesApis:
+        - people-rest-api
+    ---
+    apiVersion: backstage.io/v1alpha1
+    kind: API
+    metadata:
+      name: people-rest-api
+      title: People REST API
+      description: OpenAPI specification for the People CRUD backend secured with Keycloak.
+      tags:
+        - openapi
+        - rest
+        - keycloak
+      links:
+        - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
+          title: Live OpenAPI (Quarkus)
+          icon: docs
+    spec:
+      type: openapi
+      lifecycle: production
+      owner: guests
+      system: people-platform
+      definition:
+        $text: ./people-api.yaml
+    ---
+    apiVersion: scaffolder.backstage.io/v1beta3
+    kind: Template
+    metadata:
+      name: quarkus-react-postgres-openshift
+      title: Quarkus + React + PostgreSQL on OpenShift
+      description: Scaffold a CRUD service with Quarkus, React, PostgreSQL, Keycloak, and GitOps manifests.
+      tags:
+        - recommended
+        - java
+        - quarkus
+        - react
+        - postgres
+        - openshift
+    spec:
+      owner: guests
+      type: service
+      parameters:
+        - title: Repository details
+          required:
+            - repoUrl
+          properties:
+            repoUrl:
+              title: Repository location
+              type: string
+              ui:field: RepoUrlPicker
+              ui:options:
+                allowedHosts:
+                  - github.com
+      steps:
+        - id: fetch
+          name: Fetch skeleton
+          action: fetch:template
+          input:
+            url: ${WORKSHOP_GIT_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service
+            copyWithoutRender:
+              - .github/**
+              - "**/*.jar"
+        - id: publish
+          name: Publish to GitHub
+          action: publish:github
+          input:
+            repoUrl: ${{ parameters.repoUrl }}
+            defaultBranch: main
+            gitCommitMessage: "Scaffold People Service from Developer Hub template"
+        - id: register
+          name: Register in catalog
+          action: catalog:register
+          input:
+            repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+            catalogInfoPath: /catalog-info.yaml
+      output:
+        links:
+          - title: Repository
+            url: ${{ steps.publish.output.remoteUrl }}
+          - title: Open in catalog
+            icon: catalog
+            entityRef: ${{ steps.register.output.entityRef }}

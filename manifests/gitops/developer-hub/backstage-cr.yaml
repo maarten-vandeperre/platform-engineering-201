@@ -1,0 +1,25 @@
+apiVersion: rhdh.redhat.com/v1alpha3
+kind: Backstage
+metadata:
+  name: ${RHDH_INSTANCE_NAME}
+  namespace: ${RHDH_NAMESPACE}
+spec:
+  application:
+    appConfig:
+      configMaps:
+        - name: app-config-rhdh
+    dynamicPluginsConfigMapName: dynamic-plugins-rhdh
+    extraEnvs:
+      envs:
+        - name: NODE_TLS_REJECT_UNAUTHORIZED
+          value: "0"
+        - name: K8S_CLUSTER_NAME
+          value: openshift
+        - name: K8S_CLUSTER_URL
+          value: https://kubernetes.default.svc
+      secrets:
+        - name: app-secrets-rhdh
+        - name: argo-secrets
+        - name: backstage-kubernetes-token
+  route:
+    enabled: true

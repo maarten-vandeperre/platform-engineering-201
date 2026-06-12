@@ -1,0 +1,36 @@
+# Helm values snippet for Red Hat Developer Hub with Keycloak SSO
+# Use with: helm upgrade redhat-developer-hub <chart> -f manifests/helm/rhdh-values.yaml
+
+global:
+  clusterRouterBase: ${CLUSTER_ROUTER_BASE}
+
+upstream:
+  backstage:
+    appConfig:
+      app:
+        title: ${RHDH_APP_TITLE}
+      auth:
+        environment: production
+        providers:
+          oidc:
+            production:
+              metadataUrl: ${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
+              clientId: ${RHDH_KEYCLOAK_CLIENT_ID}
+              clientSecret: ${RHDH_OIDC_CLIENT_SECRET}
+              prompt: auto
+              signIn:
+                resolvers:
+                  - resolver: preferredUsernameMatchingUserEntityName
+                    dangerouslyAllowSignInWithoutUserInCatalog: true
+      signInPage: oidc
+      catalog:
+        rules:
+          - allow:
+              - Component
+              - System
+              - API
+              - Resource
+              - Location
+              - Template
+              - User
+              - Group

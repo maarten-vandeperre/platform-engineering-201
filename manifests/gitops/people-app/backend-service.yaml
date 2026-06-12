@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: people-backend
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app: people-backend
+    app.kubernetes.io/part-of: people-service
+spec:
+  selector:
+    app: people-backend
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080

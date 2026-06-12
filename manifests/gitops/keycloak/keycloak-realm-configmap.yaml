@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keycloak-realm-import
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app: keycloak
+    app.kubernetes.io/part-of: people-service
+data:
+  workshop-realm.json: |
+    {
+      "realm": "workshop",
+      "enabled": true,
+      "sslRequired": "external",
+      "registrationAllowed": false,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "resetPasswordAllowed": false,
+      "editUsernameAllowed": false,
+      "roles": {
+        "realm": [
+          {
+            "name": "people-crud",
+            "description": "Create, read, update, and delete people records"
+          },
+          {
+            "name": "developer-hub-user",
+            "description": "Sign in to Red Hat Developer Hub"
+          }
+        ]
+      },
+      "clients": [
+        {
+          "clientId": "people-service",
+          "name": "People Service",
+          "enabled": true,
+          "publicClient": true,
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "protocol": "openid-connect",
+          "redirectUris": [
+            "https://*/*",
+            "http://localhost:*/*"
+          ],
+          "webOrigins": [
+            "+"
+          ],
+          "attributes": {
+            "post.logout.redirect.uris": "+"
+          }
+        },
+        {
+          "clientId": "developer-hub",
+          "name": "Developer Hub",
+          "enabled": true,
+          "publicClient": false,
+          "secret": "${RHDH_KEYCLOAK_CLIENT_SECRET}",
+          "standardFlowEnabled": true,
+          "directAccessGrantsEnabled": true,
+          "protocol": "openid-connect",
+          "redirectUris": [
+            "https://redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/api/auth/oidc/handler/frame",
+            "https://redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/*",
+            "http://localhost:7007/api/auth/oidc/handler/frame"
+          ],
+          "webOrigins": [
+            "+"
+          ],
+          "attributes": {
+            "post.logout.redirect.uris": "+"
+          }
+        }
+      ],
+      "users": [
+        {
+          "username": "user",
+          "enabled": true,
+          "emailVerified": true,
+          "firstName": "Workshop",
+          "lastName": "User",
+          "email": "user@workshop.example",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "r3dh@t",
+              "temporary": false
+            }
+          ],
+          "realmRoles": [
+            "people-crud"
+          ]
+        },
+        {
+          "username": "devhub",
+          "enabled": true,
+          "emailVerified": true,
+          "firstName": "Developer",
+          "lastName": "Hub",
+          "email": "devhub@workshop.example",
+          "credentials": [
+            {
+              "type": "password",
+              "value": "${RHDH_KEYCLOAK_PASSWORD}",
+              "temporary": false
+            }
+          ],
+          "realmRoles": [
+            "developer-hub-user",
+            "people-crud"
+          ]
+        }
+      ]
+    }

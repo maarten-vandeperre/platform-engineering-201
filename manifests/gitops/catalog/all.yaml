@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: workshop-catalog
+  description: Platform Engineering 201 workshop catalog
+spec:
+  targets:
+    - ./entities/people-service.yaml
+    - ./entities/people-api.yaml
+    - ./templates/quarkus-react-postgres-template.yaml

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: people-backend
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app: people-backend
+    app.kubernetes.io/part-of: people-service
+    app.openshift.io/runtime: quarkus
+    backstage.io/kubernetes-id: people-service
+  annotations:
+    argocd/app-name: ${ARGOCD_APP_NAME}
+    app.openshift.io/vcs-uri: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
+    app.openshift.io/vcs-ref: ${WORKSHOP_GIT_BRANCH}
+    app.openshift.io/connects-to: '[{"apiVersion":"v1","kind":"Service","name":"people-postgres"}]'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: people-backend
+  template:
+    metadata:
+      labels:
+        app: people-backend
+        app.kubernetes.io/part-of: people-service
+        app.openshift.io/runtime: quarkus
+        backstage.io/kubernetes-id: people-service
+    spec:
+      containers:
+        - name: backend
+          image: ${WORKSHOP_BACKEND_IMAGE}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          env:
+            - name: DB_USERNAME
+              value: ${PEOPLE_DB_USER}
+            - name: DB_PASSWORD
+              value: ${PEOPLE_DB_PASSWORD}
+            - name: DB_JDBC_URL
+              value: jdbc:postgresql://people-postgres:5432/${PEOPLE_DB_NAME}
+            - name: OIDC_ENABLED
+              value: "${OIDC_ENABLED}"
+            - name: OIDC_AUTH_SERVER_URL
+              value: "https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/realms/${KEYCLOAK_REALM}"
+            - name: OIDC_CLIENT_ID
+              value: "${KEYCLOAK_CLIENT_ID}"
+          readinessProbe:
+            httpGet:
+              path: /q/health/ready
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /q/health/live
+              port: 8080
+            initialDelaySeconds: 40
+            periodSeconds: 20

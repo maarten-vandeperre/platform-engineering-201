@@ -1,0 +1,31 @@
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: guests
+  title: Workshop Team
+  description: Default owner group for workshop catalog entities.
+spec:
+  type: team
+  children: []
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: people-service
+  title: People Service
+  description: CRUD API and UI for Person records.
+  annotations:
+    github.com/project-slug: maarten-vandeperre/platform-engineering-201
+    backstage.io/kubernetes-id: people-service
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/part-of=people-service
+  tags:
+    - java
+    - quarkus
+    - react
+spec:
+  type: service
+  lifecycle: experimental
+  owner: guests
+  providesApis:
+    - people-rest-api
