@@ -1,0 +1,108 @@
+{
+  "entries": [
+    {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "quarkus",
+      "id": "quarkus",
+      "title": "Quarkus",
+      "quadrant": "frameworks",
+      "description": "Supersonic subatomic Java framework used for the People REST API."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "react",
+      "id": "react",
+      "title": "React",
+      "quadrant": "frameworks",
+      "description": "Frontend UI for the People CRUD workshop application."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "postgresql",
+      "id": "postgresql",
+      "title": "PostgreSQL",
+      "quadrant": "infrastructure",
+      "description": "Relational database backing the People Service."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "openshift",
+      "id": "openshift",
+      "title": "OpenShift",
+      "quadrant": "infrastructure",
+      "description": "Container platform hosting the workshop workloads."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "keycloak",
+      "id": "keycloak",
+      "title": "Keycloak",
+      "quadrant": "infrastructure",
+      "description": "OIDC provider securing the People API and Developer Hub."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "argocd",
+      "id": "argocd",
+      "title": "Argo CD",
+      "quadrant": "infrastructure",
+      "description": "GitOps continuous delivery for the People Service manifests."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "developer-hub",
+      "id": "developer-hub",
+      "title": "Red Hat Developer Hub",
+      "quadrant": "infrastructure",
+      "description": "Internal developer portal with catalog, templates, and Kubernetes views."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "trial", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "openapi",
+      "id": "openapi",
+      "title": "OpenAPI",
+      "quadrant": "process",
+      "description": "Machine-readable API contracts published from the People backend."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "assess", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "testcontainers",
+      "id": "testcontainers",
+      "title": "Testcontainers",
+      "quadrant": "frameworks",
+      "description": "Candidate for integration testing PostgreSQL dependencies locally."
+    }
+  ],
+  "quadrants": [
+    { "id": "infrastructure", "name": "Infrastructure" },
+    { "id": "frameworks", "name": "Frameworks" },
+    { "id": "languages", "name": "Languages" },
+    { "id": "process", "name": "Process" }
+  ],
+  "rings": [
+    {
+      "id": "adopt",
+      "name": "ADOPT",
+      "color": "#5BA300",
+      "description": "Technologies we use and recommend for the workshop."
+    },
+    {
+      "id": "trial",
+      "name": "TRIAL",
+      "color": "#009EB0",
+      "description": "Worth pursuing with a clear goal and limited scope."
+    },
+    {
+      "id": "assess",
+      "name": "ASSESS",
+      "color": "#C7BA00",
+      "description": "Worth exploring to understand impact on the platform."
+    },
+    {
+      "id": "hold",
+      "name": "HOLD",
+      "color": "#E09B96",
+      "description": "Proceed with caution or avoid for new work."
+    }
+  ]
+}

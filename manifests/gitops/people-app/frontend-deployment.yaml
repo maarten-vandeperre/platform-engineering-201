@@ -51,3 +51,12 @@ spec:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 10
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: people-frontend-nginx

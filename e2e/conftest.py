@@ -29,6 +29,10 @@ def workshop_config():
         "rhdh_url": _env("RHDH_URL", default_rhdh).rstrip("/"),
         "people_backend_url": _env("PEOPLE_BACKEND_URL", default_backend).rstrip("/"),
         "people_frontend_url": _env("PEOPLE_FRONTEND_URL", default_frontend).rstrip("/"),
+        "catalog_server_url": _env(
+            "CATALOG_SERVER_URL",
+            f"https://workshop-catalog-server-{namespace}.{router_base}",
+        ).rstrip("/"),
         "keycloak_url": _env("KEYCLOAK_URL", default_keycloak).rstrip("/"),
         "keycloak_realm": _env("KEYCLOAK_REALM", "workshop"),
         "people_client_id": _env("KEYCLOAK_CLIENT_ID", "people-service"),
@@ -37,6 +41,7 @@ def workshop_config():
         "username": _env("RHDH_KEYCLOAK_USER", "devhub"),
         "password": _env("RHDH_KEYCLOAK_PASSWORD", "r#dh@t"),
         "component": _env("RHDH_COMPONENT", "people-service"),
+        "api_name": _env("RHDH_API", "people-rest-api"),
         "headless": _env("E2E_HEADLESS", "true").lower() in {"1", "true", "yes"},
         "timeout": int(_env("E2E_TIMEOUT_SECONDS", "180")),
     }

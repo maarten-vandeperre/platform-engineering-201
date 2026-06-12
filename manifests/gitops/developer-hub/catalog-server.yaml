@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workshop-catalog-server
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workshop-catalog-server
+  template:
+    metadata:
+      labels:
+        app: workshop-catalog-server
+    spec:
+      containers:
+        - name: httpd
+          image: python:3.12-alpine
+          command: ["python", "-m", "http.server", "8080", "--directory", "/catalog"]
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: catalog
+              mountPath: /catalog
+              readOnly: true
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            runAsUser: 1003920000
+      volumes:
+        - name: catalog
+          configMap:
+            name: workshop-catalog-entities
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workshop-catalog-server
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+spec:
+  selector:
+    app: workshop-catalog-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: workshop-catalog-server
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+spec:
+  to:
+    kind: Service
+    name: workshop-catalog-server
+  port:
+    targetPort: http
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

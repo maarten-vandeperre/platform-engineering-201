@@ -66,6 +66,12 @@ data:
         - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/api/people
           title: People API
           icon: web
+        - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
+          title: OpenAPI spec
+          icon: docs
+        - url: https://people-frontend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/openapi.yaml
+          title: OpenAPI (via UI route)
+          icon: docs
     spec:
       type: service
       lifecycle: production
@@ -94,7 +100,7 @@ data:
       owner: guests
       system: people-platform
       definition:
-        $text: ./people-api.yaml
+        $text: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
     ---
     apiVersion: scaffolder.backstage.io/v1beta3
     kind: Template

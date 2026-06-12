@@ -87,3 +87,57 @@ def wait_for_backend_ready(config, timeout_seconds=300):
         "Backend did not become ready: "
         f"{last_error}. Run ./scripts/repair-people-app.sh after logging in with oc."
     )
+
+
+def assert_openapi_response(body):
+    lowered = body.lower()
+    assert "openapi:" in lowered or '"openapi"' in lowered
+    assert "people" in lowered
+
+
+def sign_in_via_rhdh_popup(driver, config, return_url):
+    import time
+
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    driver.get(return_url)
+    time.sleep(5)
+    if not driver.find_elements(By.XPATH, "//button[normalize-space(.)='Sign In']"):
+        return
+
+    main_window = driver.current_window_handle
+    driver.find_element(By.XPATH, "//button[normalize-space(.)='Sign In']").click()
+    WebDriverWait(driver, config["timeout"]).until(lambda d: len(d.window_handles) > 1)
+
+    popup = next(h for h in driver.window_handles if h != main_window)
+    driver.switch_to.window(popup)
+    body = driver.find_element(By.TAG_NAME, "body").text.lower()
+    assert "client not found" not in body
+    assert "invalid parameter: redirect_uri" not in body
+
+    username = WebDriverWait(driver, config["timeout"]).until(
+        EC.visibility_of_element_located((By.ID, "username"))
+    )
+    password = driver.find_element(By.ID, "password")
+    username.clear()
+    username.send_keys(config["username"])
+    password.clear()
+    password.send_keys(config["password"])
+    driver.find_element(By.ID, "kc-login").click()
+    WebDriverWait(driver, 60).until(lambda d: len(d.window_handles) == 1)
+    driver.switch_to.window(main_window)
+    driver.get(return_url)
+    time.sleep(5)
+
+
+def dismiss_onboarding(driver):
+    import time
+
+    from selenium.webdriver.common.by import By
+
+    hide = driver.find_elements(By.XPATH, "//button[contains(., 'Hide')]")
+    if hide:
+        hide[0].click()
+        time.sleep(1)

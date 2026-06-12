@@ -12,12 +12,14 @@ require_oc
 resolve_keycloak_urls
 
 if [[ "${OIDC_ENABLED}" == "true" ]]; then
-  "${SCRIPTS_DIR}/configure-keycloak-realm.sh"
+  "${SCRIPTS_DIR}/repair-keycloak.sh"
 fi
 
 for file in postgres-secret.yaml postgres-pvc.yaml postgres-deployment.yaml postgres-service.yaml; do
   render_manifest "${MANIFESTS_DIR}/people-app/${file}" | oc apply -f -
 done
+
+render_manifest "${MANIFESTS_DIR}/people-app/frontend-nginx-configmap.yaml" | oc apply -f -
 
 echo "Ensuring PostgreSQL is running..."
 oc scale deployment/people-postgres --replicas=1 -n "${WORKSHOP_NAMESPACE}"

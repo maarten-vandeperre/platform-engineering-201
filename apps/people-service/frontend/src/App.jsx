@@ -91,6 +91,9 @@ export default function App({ auth }) {
         {isAuthEnabled() && (
           <div className="auth-bar">
             <span>Signed in as {auth?.username}</span>
+            <a href="/openapi.yaml" target="_blank" rel="noreferrer">
+              OpenAPI
+            </a>
             <button type="button" className="secondary" onClick={logout}>
               Log out
             </button>

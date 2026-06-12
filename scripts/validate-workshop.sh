@@ -11,6 +11,15 @@ require_oc
 command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
+if oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+  KEYCLOAK_READY=$(oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  if [[ "${KEYCLOAK_READY}" != "1" ]]; then
+    echo "Keycloak is not running (readyReplicas=${KEYCLOAK_READY}). Run ./scripts/repair-keycloak.sh" >&2
+    exit 1
+  fi
+fi
+
 BACKEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-backend")
 FRONTEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-frontend")
 
@@ -100,6 +109,38 @@ fi
 echo "== Frontend homepage =="
 curl -sk -o /dev/null -w "HTTP %{http_code}\n" "https://${FRONTEND_HOST}/"
 
+echo "== OpenAPI spec (backend) =="
+OPENAPI=$(curl -sk "https://${BACKEND_HOST}/q/openapi")
+printf '%s\n' "${OPENAPI}" | sed -n '1,5p'
+if [[ "${OPENAPI}" != *openapi* && "${OPENAPI}" != *OpenAPI* ]]; then
+  echo "Backend OpenAPI endpoint is not serving a spec" >&2
+  exit 1
+fi
+
+echo "== OpenAPI aliases (frontend) =="
+for OPENAPI_PATH in /q/openapi /openapi.yaml; do
+  CODE=$(curl -sk -o /dev/null -w "%{http_code}" "https://${FRONTEND_HOST}${OPENAPI_PATH}")
+  echo "${OPENAPI_PATH}: HTTP ${CODE}"
+  if [[ "${CODE}" != "200" ]]; then
+    echo "Frontend OpenAPI path ${OPENAPI_PATH} failed. Apply people-frontend-nginx ConfigMap." >&2
+    exit 1
+  fi
+done
+
+if oc get route workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+  CATALOG_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "workshop-catalog-server")
+  echo "== Catalog server =="
+  curl -sk -o /dev/null -w "entities.yaml: HTTP %{http_code}\n" "https://${CATALOG_HOST}/entities.yaml"
+  curl -sk -o /dev/null -w "tech-radar.json: HTTP %{http_code}\n" "https://${CATALOG_HOST}/tech-radar.json"
+fi
+
+if oc get route redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+  RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub")
+  echo "== Developer Hub catalog endpoints =="
+  echo "APIs: https://${RHDH_HOST}/catalog?filters%5Bkind%5D=api"
+  echo "Tech Radar: https://${RHDH_HOST}/tech-radar"
+fi
+
 if [[ -n "${KEYCLOAK_URL:-}" ]]; then
   echo "== Keycloak readiness =="
   curl -sk -o /dev/null -w "HTTP %{http_code}\n" "${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}"
@@ -107,12 +148,12 @@ if [[ -n "${KEYCLOAK_URL:-}" ]]; then
   RHDH_HOST="${RHDH_HOST:-redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}}"
   AUTH_URL="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/auth?client_id=${RHDH_KEYCLOAK_CLIENT_ID}&response_type=code&scope=openid&redirect_uri=https%3A%2F%2F${RHDH_HOST}%2Fapi%2Fauth%2Foidc%2Fhandler%2Fframe"
   echo "== Developer Hub OIDC client in Keycloak =="
-  AUTH_HEAD=$(curl -sk "${AUTH_URL}" | head -40)
-  if echo "${AUTH_HEAD}" | grep -qi 'client not found'; then
+  AUTH_HEAD=$(curl -sk "${AUTH_URL}")
+  if [[ "${AUTH_HEAD}" == *client\ not\ found* ]] || [[ "${AUTH_HEAD}" == *Client\ not\ found* ]]; then
     echo "Keycloak client '${RHDH_KEYCLOAK_CLIENT_ID}' is missing. Run ./scripts/configure-keycloak-realm.sh" >&2
     exit 1
   fi
-  if ! echo "${AUTH_HEAD}" | grep -Eiq 'invalid parameter: redirect_uri|username|sign in|log in|password|login-pf'; then
+  if [[ "${AUTH_HEAD}" != *login-pf* && "${AUTH_HEAD}" != *username* && "${AUTH_HEAD}" != *Sign\ in* ]]; then
     echo "Unexpected Keycloak auth response for client '${RHDH_KEYCLOAK_CLIENT_ID}'" >&2
     exit 1
   fi

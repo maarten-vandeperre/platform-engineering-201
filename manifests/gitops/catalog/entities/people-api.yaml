@@ -18,4 +18,4 @@ spec:
   owner: guests
   system: people-platform
   definition:
-    $text: ../openapi/people-api.yaml
+    $text: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi

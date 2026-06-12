@@ -91,6 +91,9 @@ data:
         - host: github.com
           token: ${GITHUB_TOKEN}
 
+    techRadar:
+      url: https://workshop-catalog-server-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/tech-radar.json
+
     kubernetes:
       serviceLocatorMethod:
         type: singleTenant

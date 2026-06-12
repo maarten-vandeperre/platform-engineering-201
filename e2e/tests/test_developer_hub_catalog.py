@@ -1,0 +1,69 @@
+import time
+
+import pytest
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.support.ui import WebDriverWait
+
+from helpers import dismiss_onboarding, sign_in_via_rhdh_popup
+
+
+def _wait_for_text(driver, timeout, *needles):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        text = driver.find_element(By.TAG_NAME, "body").text
+        lowered = text.lower()
+        if all(needle.lower() in lowered for needle in needles):
+            return text
+        time.sleep(2)
+    pytest.fail(
+        "Expected page text not found. "
+        f"URL={driver.current_url} needles={needles}"
+    )
+
+
+@pytest.mark.e2e
+def test_developer_hub_api_catalog_listing(workshop_config, ready_stack, driver):
+    config = workshop_config
+    api_list_url = f"{config['rhdh_url']}/catalog?filters%5Bkind%5D=api"
+    api_entity_url = (
+        f"{config['rhdh_url']}/catalog/default/api/{config['api_name']}"
+    )
+
+    sign_in_via_rhdh_popup(driver, config, api_list_url)
+    dismiss_onboarding(driver)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("catalog")
+    )
+    page_text = _wait_for_text(driver, config["timeout"], "People REST API")
+    assert config["api_name"].replace("-", " ") in page_text.lower() or "people rest api" in page_text.lower()
+
+    driver.get(api_entity_url)
+    entity_text = _wait_for_text(
+        driver,
+        config["timeout"],
+        "People REST API",
+        "openapi",
+    )
+    assert "people" in entity_text.lower()
+
+
+@pytest.mark.e2e
+def test_developer_hub_tech_radar(workshop_config, ready_stack, driver):
+    config = workshop_config
+    radar_url = f"{config['rhdh_url']}/tech-radar"
+
+    sign_in_via_rhdh_popup(driver, config, radar_url)
+    dismiss_onboarding(driver)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("tech-radar")
+    )
+    page_text = _wait_for_text(
+        driver,
+        config["timeout"],
+        "Quarkus",
+        "ADOPT",
+    )
+    assert "postgresql" in page_text.lower() or "openshift" in page_text.lower()

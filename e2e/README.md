@@ -43,7 +43,11 @@ E2E_HEADLESS=false ./e2e/run-e2e.sh
 ## What is validated
 
 1. Backend `/q/health/ready` is `UP`, including the database health check.
-2. Authenticated People API CRUD works through Keycloak.
-3. People frontend login and create-person flow works.
-4. Developer Hub Keycloak client is registered.
-5. Developer Hub Kubernetes and Topology tabs show healthy `people-postgres` workloads.
+2. OpenAPI is reachable at `/q/openapi` (backend) and `/openapi.yaml` (frontend proxy).
+3. Workshop catalog server serves entities, OpenAPI file, and Tech Radar JSON.
+4. Authenticated People API CRUD works through Keycloak.
+5. People frontend login and create-person flow works.
+6. Developer Hub Keycloak client is registered.
+7. Developer Hub Kubernetes and Topology tabs show healthy workloads.
+8. Developer Hub API catalog lists **People REST API**.
+9. Developer Hub Tech Radar page loads workshop technologies.
