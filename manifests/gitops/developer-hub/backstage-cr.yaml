@@ -23,3 +23,6 @@ spec:
         - name: backstage-kubernetes-token
   route:
     enabled: true
+  # For RHDH Operator v1alpha5+, prefer patching the deployment volume via:
+  # ./scripts/setup-developer-hub-dynamic-plugins-cache.sh
+  # See manifests/gitops/developer-hub/dynamic-plugins-pvc.yaml

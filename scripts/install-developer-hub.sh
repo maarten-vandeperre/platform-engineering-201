@@ -35,3 +35,5 @@ if [[ -n "${RHDH_HOST}" ]]; then
 else
   echo "Developer Hub route not ready yet. Check: oc get backstage,route -n ${RHDH_NAMESPACE}"
 fi
+
+"${SCRIPTS_DIR}/setup-developer-hub-dynamic-plugins-cache.sh" --no-rollout || true

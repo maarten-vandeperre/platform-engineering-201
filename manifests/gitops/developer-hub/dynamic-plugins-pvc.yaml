@@ -1,0 +1,18 @@
+# Persistent cache for RHDH dynamic plugins (volume name must be dynamic-plugins-root).
+# Replaces the default ephemeral volumeClaimTemplate so install-dynamic-plugins
+# can skip re-downloading unchanged plugins on pod restarts.
+# See docs/workshop/06-install-developer-hub.md and ./scripts/setup-developer-hub-dynamic-plugins-cache.sh
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: dynamic-plugins-root
+  namespace: ${RHDH_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+    app.kubernetes.io/component: dynamic-plugins-cache
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

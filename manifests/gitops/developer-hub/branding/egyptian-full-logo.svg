@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 40" role="img" aria-label="Developer Hub">
+  <defs>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F4E4A6"/>
+      <stop offset="45%" stop-color="#D4AF37"/>
+      <stop offset="100%" stop-color="#9A7B1A"/>
+    </linearGradient>
+    <linearGradient id="lapis" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1E3A5F"/>
+      <stop offset="100%" stop-color="#0F2744"/>
+    </linearGradient>
+  </defs>
+  <rect width="220" height="40" rx="4" fill="url(#lapis)"/>
+  <g transform="translate(8,6)">
+    <path fill="url(#gold)" d="M14 2c-6 0-10 4-10 10 0 4 2 7 5 9l-1 5h12l-1-5c3-2 5-5 5-9 0-6-4-10-10-10zm0 4c3 0 5 2 5 6s-2 6-5 6-5-2-5-6 2-6 5-6z"/>
+    <path fill="#F5EDD6" opacity="0.85" d="M12 8h4v2h-4zm0 4h4v2h-4z"/>
+  </g>
+  <text x="42" y="17" fill="url(#gold)" font-family="Georgia, 'Times New Roman', serif" font-size="11" font-weight="700" letter-spacing="0.08em">DEVELOPER</text>
+  <text x="42" y="31" fill="#F5EDD6" font-family="Georgia, 'Times New Roman', serif" font-size="11" font-weight="400" letter-spacing="0.22em">HUB</text>
+  <path fill="none" stroke="#D4AF37" stroke-width="0.8" opacity="0.55" d="M170 8h38M170 32h38M170 8v24"/>
+  <path fill="#D4AF37" opacity="0.7" d="M176 14h4v12h-4zm8 0h4v12h-4zm8 0h4v8h-4z"/>
+</svg>

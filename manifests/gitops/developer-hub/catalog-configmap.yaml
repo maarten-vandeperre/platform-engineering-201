@@ -15,7 +15,13 @@ data:
       description: Default owner group for workshop catalog entities.
     spec:
       type: team
+      parent: maartens-organization
       children: []
+      members:
+        - maarten-vandeperre
+        - sophie-lambert
+        - tom-de-vries
+        - nina-bakker
     ---
     apiVersion: backstage.io/v1alpha1
     kind: System
@@ -24,7 +30,7 @@ data:
       title: People Platform
       description: Workshop system demonstrating Quarkus, PostgreSQL, React, GitOps, Keycloak, and Developer Hub.
     spec:
-      owner: guests
+      owner: platform-team
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -44,6 +50,7 @@ data:
         backstage.io/kubernetes-namespace: ${WORKSHOP_NAMESPACE}
         app.openshift.io/vcs-uri: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
         app.openshift.io/vcs-ref: ${WORKSHOP_GIT_BRANCH}
+        orchestrator.io/workflows: '["create-person"]'
       tags:
         - java
         - quarkus
@@ -67,17 +74,20 @@ data:
         - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/api/people
           title: People API
           icon: web
+        - url: https://redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/catalog/default/api/people-rest-api/definition
+          title: Swagger UI
+          icon: docs
         - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
-          title: OpenAPI spec
-          icon: docs
-        - url: https://people-frontend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/openapi.yaml
-          title: OpenAPI (via UI route)
-          icon: docs
+          title: Raw OpenAPI (YAML)
+          icon: catalog
     spec:
       type: service
       lifecycle: production
-      owner: guests
+      owner: product-team
       system: people-platform
+      dependsOn:
+        - resource:default/workshop-postgresql
+        - resource:default/workshop-keycloak
       providesApis:
         - people-rest-api
     ---
@@ -130,14 +140,18 @@ data:
       annotations:
         github.com/project-slug: ${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
         backstage.io/source-location: url:https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service/
+        orchestrator.io/workflows: '["create-person"]'
       tags:
         - openapi
         - rest
         - keycloak
       links:
-        - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
-          title: Live OpenAPI (Quarkus)
+        - url: https://redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/catalog/default/api/people-rest-api/definition
+          title: Swagger UI
           icon: docs
+        - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
+          title: Raw OpenAPI (YAML)
+          icon: catalog
         - url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/actions
           title: GitHub Actions
           icon: github
@@ -150,7 +164,7 @@ data:
       owner: guests
       system: people-platform
       definition:
-        $text: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
+        $text: https://workshop-catalog-server-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/people-api.yaml
     ---
     apiVersion: scaffolder.backstage.io/v1beta3
     kind: Template
@@ -172,6 +186,7 @@ data:
         - title: Repository details
           required:
             - repoUrl
+            - owner
           properties:
             repoUrl:
               title: Repository location
@@ -180,12 +195,42 @@ data:
               ui:options:
                 allowedHosts:
                   - github.com
+            owner:
+              title: Component owner
+              type: string
+              description: Backstage entity owner (use guests for the workshop)
+              default: guests
+        - title: Application details
+          required:
+            - componentId
+            - description
+          properties:
+            componentId:
+              title: Component name
+              type: string
+              pattern: '^[a-z0-9-]+$'
+              description: Unique catalog entity name (lowercase, hyphens; match the new repo name)
+            componentTitle:
+              title: Display title
+              type: string
+              description: Optional human-readable title (defaults to component name)
+            description:
+              title: Description
+              type: string
+              default: CRUD service generated from the Platform Engineering 201 workshop template
       steps:
         - id: fetch
           name: Fetch skeleton
           action: fetch:template
           input:
-            url: ${WORKSHOP_GIT_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service
+            url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service-scaffold
+            values:
+              componentId: ${{ parameters.componentId }}
+              componentTitle: ${{ parameters.componentTitle }}
+              description: ${{ parameters.description }}
+              owner: ${{ parameters.owner }}
+              repoOwner: ${{ parameters.repoUrl | parseRepoUrl | pick('owner') }}
+              repoName: ${{ parameters.repoUrl | parseRepoUrl | pick('repo') }}
             copyWithoutRender:
               - .github/**
               - "**/*.jar"
@@ -195,7 +240,9 @@ data:
           input:
             repoUrl: ${{ parameters.repoUrl }}
             defaultBranch: main
-            gitCommitMessage: "Scaffold People Service from Developer Hub template"
+            repoVisibility: public
+            description: ${{ parameters.description }}
+            gitCommitMessage: "Scaffold application from Developer Hub template"
         - id: register
           name: Register in catalog
           action: catalog:register

@@ -56,7 +56,7 @@ Or run steps individually:
 ./scripts/setup-argocd-token.sh
 
 # 4. Developer Hub
-export GITHUB_TOKEN=ghp_...       # optional, for GitHub Actions tab
+export GITHUB_TOKEN=ghp_...       # scaffolder publish — run ./scripts/setup-github-auth.sh
 ./scripts/install-developer-hub-helm.sh
 ./scripts/setup-developer-hub-config.sh
 ./scripts/configure-developer-hub-catalog.sh

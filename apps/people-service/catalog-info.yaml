@@ -6,7 +6,13 @@ metadata:
   description: Default owner group for workshop catalog entities.
 spec:
   type: team
+  parent: maartens-organization
   children: []
+  members:
+    - maarten-vandeperre
+    - sophie-lambert
+    - tom-de-vries
+    - nina-bakker
 
 ---
 apiVersion: backstage.io/v1alpha1

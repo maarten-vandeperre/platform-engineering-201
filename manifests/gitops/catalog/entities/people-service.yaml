@@ -6,7 +6,13 @@ metadata:
   description: Default owner group for workshop catalog entities.
 spec:
   type: team
+  parent: maartens-organization
   children: []
+  members:
+    - maarten-vandeperre
+    - sophie-lambert
+    - tom-de-vries
+    - nina-bakker
 
 ---
 apiVersion: backstage.io/v1alpha1
@@ -16,7 +22,7 @@ metadata:
   title: People Platform
   description: Workshop system demonstrating Quarkus, PostgreSQL, React, GitOps, and Developer Hub.
 spec:
-  owner: guests
+  owner: platform-team
 
 ---
 apiVersion: backstage.io/v1alpha1
@@ -36,6 +42,7 @@ metadata:
     backstage.io/kubernetes-namespace: ${WORKSHOP_NAMESPACE}
     app.openshift.io/vcs-uri: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
     app.openshift.io/vcs-ref: ${WORKSHOP_GIT_BRANCH}
+    orchestrator.io/workflows: '["create-person"]'
   tags:
     - java
     - quarkus
@@ -56,7 +63,10 @@ metadata:
 spec:
   type: service
   lifecycle: production
-  owner: guests
+  owner: product-team
   system: people-platform
+  dependsOn:
+    - resource:default/workshop-postgresql
+    - resource:default/workshop-keycloak
   providesApis:
     - people-rest-api

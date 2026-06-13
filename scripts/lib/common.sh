@@ -85,7 +85,7 @@ ensure_project() {
 render_manifest() {
   local input="$1"
   envsubst \
-    '${WORKSHOP_NAMESPACE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${WORKSHOP_GITHUB_ORG} ${WORKSHOP_GITHUB_REPO} ${WORKSHOP_BACKEND_IMAGE} ${WORKSHOP_FRONTEND_IMAGE} ${RHDH_NAMESPACE} ${RHDH_INSTANCE_NAME} ${RHDH_APP_TITLE} ${GITOPS_NAMESPACE} ${ARGOCD_INSTANCE_NAME} ${ARGOCD_APP_NAME} ${PEOPLE_DB_NAME} ${PEOPLE_DB_USER} ${PEOPLE_DB_PASSWORD} ${KEYCLOAK_ADMIN_USER} ${KEYCLOAK_ADMIN_PASSWORD} ${KEYCLOAK_REALM} ${KEYCLOAK_CLIENT_ID} ${KEYCLOAK_URL} ${KEYCLOAK_HOST} ${OIDC_AUTH_SERVER_URL} ${OIDC_ENABLED} ${CLUSTER_ROUTER_BASE} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_KEYCLOAK_CLIENT_SECRET} ${RHDH_KEYCLOAK_USER} ${RHDH_KEYCLOAK_PASSWORD} ${RHDH_OIDC_CLIENT_SECRET} ${WORKSHOP_CATALOG_URL} ${BACKEND_SECRET} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${K8S_SA_TOKEN} ${K8S_CA_DATA} ${ORCHESTRATOR_DATA_INDEX_IMAGE}' \
+    '${WORKSHOP_NAMESPACE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${WORKSHOP_GITHUB_ORG} ${WORKSHOP_GITHUB_REPO} ${WORKSHOP_BACKEND_IMAGE} ${WORKSHOP_FRONTEND_IMAGE} ${WORKSHOP_IMAGE_REGISTRY} ${RHDH_NAMESPACE} ${RHDH_INSTANCE_NAME} ${RHDH_APP_TITLE} ${GITOPS_NAMESPACE} ${ARGOCD_INSTANCE_NAME} ${ARGOCD_APP_NAME} ${PEOPLE_DB_NAME} ${PEOPLE_DB_USER} ${PEOPLE_DB_PASSWORD} ${PEOPLE_KEYCLOAK_USER} ${PEOPLE_KEYCLOAK_PASSWORD} ${PEOPLE_NOTIFICATION_TOKEN} ${KEYCLOAK_ADMIN_USER} ${KEYCLOAK_ADMIN_PASSWORD} ${KEYCLOAK_REALM} ${KEYCLOAK_CLIENT_ID} ${KEYCLOAK_URL} ${KEYCLOAK_HOST} ${OIDC_AUTH_SERVER_URL} ${OIDC_ENABLED} ${CLUSTER_ROUTER_BASE} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_KEYCLOAK_CLIENT_SECRET} ${RHDH_KEYCLOAK_USER} ${RHDH_KEYCLOAK_PASSWORD} ${RHDH_OIDC_CLIENT_SECRET} ${WORKSHOP_CATALOG_URL} ${BACKEND_SECRET} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${K8S_SA_TOKEN} ${K8S_CA_DATA} ${ORCHESTRATOR_DATA_INDEX_IMAGE} ${KEYCLOAK_SERVICE_USER} ${KEYCLOAK_SERVICE_PASSWORD}' \
     <"${input}"
 }
 
@@ -228,4 +228,124 @@ ensure_workshop_platform() {
   ensure_rhdh_postgres
   ensure_catalog_server
   echo "Workshop platform dependencies are ready."
+}
+
+upsert_workshop_env() {
+  local key="$1"
+  local value="$2"
+  local file="${SCRIPTS_DIR}/workshop.env"
+  local tmp
+  tmp="$(mktemp)"
+
+  if [[ ! -f "${file}" ]]; then
+    cp "${SCRIPTS_DIR}/workshop.env.example" "${file}"
+    echo "Created ${file} from workshop.env.example"
+  fi
+
+  if grep -q "^export ${key}=" "${file}"; then
+    awk -v k="${key}" -v v="${value}" '
+      BEGIN { updated = 0 }
+      $0 ~ "^export " k "=" {
+        print "export " k "=\"" v "\""
+        updated = 1
+        next
+      }
+      { print }
+      END {
+        if (!updated) {
+          print "export " k "=\"" v "\""
+        }
+      }
+    ' "${file}" >"${tmp}"
+  else
+    cp "${file}" "${tmp}"
+    printf '\nexport %s="%s"\n' "${key}" "${value}" >>"${tmp}"
+  fi
+  mv "${tmp}" "${file}"
+}
+
+validate_github_pat() {
+  local token="$1"
+  local tmp_headers tmp_body login scopes repo_access
+
+  if [[ -z "${token}" || "${token}" == "changeme" ]]; then
+    echo "GITHUB_TOKEN is not set." >&2
+    return 1
+  fi
+
+  tmp_headers="$(mktemp)"
+  tmp_body="$(mktemp)"
+  if ! curl -fsSL -D "${tmp_headers}" -o "${tmp_body}" \
+    -H "Authorization: Bearer ${token}" \
+    -H "Accept: application/vnd.github+json" \
+    https://api.github.com/user; then
+    rm -f "${tmp_headers}" "${tmp_body}"
+    echo "GitHub token validation failed (HTTP error from api.github.com/user)." >&2
+    return 1
+  fi
+
+  login="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("login",""))' "${tmp_body}")"
+  scopes="$(awk 'BEGIN { IGNORECASE=1 } /^x-oauth-scopes:/ { sub(/^[^:]+:[[:space:]]*/, ""); print }' "${tmp_headers}" | tr -d '\r')"
+  rm -f "${tmp_headers}" "${tmp_body}"
+
+  if [[ -z "${login}" ]]; then
+    echo "GitHub token validation failed (empty login)." >&2
+    return 1
+  fi
+
+  if [[ -n "${scopes}" && "${scopes}" != " " ]]; then
+    if [[ "${scopes}" != *repo* ]]; then
+      echo "GitHub token is missing the 'repo' scope (required for scaffolder publish)." >&2
+      echo "Create a classic PAT at https://github.com/settings/tokens/new with scope: repo" >&2
+      return 1
+    fi
+  fi
+
+  repo_access="$(curl -fsSL -o /dev/null -w "%{http_code}" \
+    -H "Authorization: Bearer ${token}" \
+    -H "Accept: application/vnd.github+json" \
+    "https://api.github.com/repos/${WORKSHOP_GITHUB_ORG}/platform-engineering-201" || echo "000")"
+  if [[ "${repo_access}" != "200" && "${repo_access}" != "404" ]]; then
+    echo "Warning: token could not read GitHub API repos endpoint (HTTP ${repo_access})." >&2
+  fi
+
+  echo "${login}"
+}
+
+verify_cluster_github_token() {
+  local namespace="${RHDH_NAMESPACE:-${WORKSHOP_NAMESPACE}}"
+  local secret_token app_config
+
+  if ! oc get secret rhdh-workshop-secrets -n "${namespace}" >/dev/null 2>&1; then
+    echo "Secret rhdh-workshop-secrets not found in ${namespace}." >&2
+    return 1
+  fi
+
+  secret_token="$(oc get secret rhdh-workshop-secrets -n "${namespace}" \
+    -o jsonpath='{.data.GITHUB_TOKEN}' | base64 -d)"
+  if [[ -z "${secret_token}" || "${secret_token}" == "changeme" ]]; then
+    echo "Cluster secret rhdh-workshop-secrets still has GITHUB_TOKEN=changeme." >&2
+    return 1
+  fi
+
+  if oc get configmap redhat-developer-hub-app-config -n "${namespace}" >/dev/null 2>&1; then
+    app_config="$(oc get configmap redhat-developer-hub-app-config -n "${namespace}" \
+      -o jsonpath='{.data.app-config\.yaml}')"
+  else
+    app_config="$(oc get configmap app-config-rhdh -n "${namespace}" \
+      -o jsonpath='{.data.app-config-rhdh\.yaml}' 2>/dev/null || true)"
+  fi
+
+  if [[ -z "${app_config}" ]]; then
+    echo "Developer Hub app-config ConfigMap not found." >&2
+    return 1
+  fi
+
+  if ! grep -Fq "token: ${secret_token}" <<<"${app_config}" \
+    && ! grep -Fq "Authorization: Bearer ${secret_token}" <<<"${app_config}"; then
+    echo "Developer Hub app-config does not contain the configured GitHub token." >&2
+    return 1
+  fi
+
+  return 0
 }

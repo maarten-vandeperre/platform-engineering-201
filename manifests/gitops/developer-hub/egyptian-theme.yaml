@@ -1,0 +1,154 @@
+# Egyptian theme branding for Red Hat Developer Hub (merged into app-config by setup-developer-hub-config.sh).
+branding:
+  fullLogoWidth: 180px
+  fullLogo: ${EGYPTIAN_FULL_LOGO}
+  iconLogo: ${EGYPTIAN_ICON_LOGO}
+  theme:
+    light:
+      variant: rhdh
+      mode: light
+      palette:
+        primary:
+          main: "#B8860B"
+        secondary:
+          main: "#1E3A5F"
+        background:
+          default: "#F5EDD6"
+          paper: "#FFFAF0"
+        navigation:
+          background: "#1E2433"
+          indicator: "#D4AF37"
+          color: "#F5EDD6"
+          selectedColor: "#D4AF37"
+          navItem:
+            hoverBackground: "#2A3044"
+          submenu:
+            background: "#151A28"
+        link: "#1E3A5F"
+        linkHover: "#9A7B1A"
+        gold: "#D4AF37"
+        bursts:
+          gradient:
+            linear: "linear-gradient(-137deg, #D4AF37 0%, #1E3A5F 100%)"
+          backgroundColor:
+            default: "#1E3A5F"
+          fontColor: "#F5EDD6"
+        rhdh:
+          general:
+            mainSectionBackgroundColor: "#F5EDD6"
+            sidebarBackgroundColor: "#1E2433"
+            cardBackgroundColor: "#FFFAF0"
+            cardBorderColor: "#C9A227"
+            headerBottomBorderColor: "#C9A227"
+            searchBarBorderColor: "#D4C4A8"
+            tableRowHover: "#EDE0C4"
+          primary:
+            main: "#B8860B"
+            focusVisibleBorder: "#D4AF37"
+          secondary:
+            main: "#1E3A5F"
+            focusVisibleBorder: "#264653"
+          cards:
+            headerBackgroundColor: "#1E3A5F"
+            headerTextColor: "#D4AF37"
+      defaultPageTheme: default
+      pageTheme:
+        default:
+          backgroundColor: "#1E3A5F"
+          fontColor: "#D4AF37"
+          shape: wave
+        home:
+          backgroundColor: "#B8860B"
+          fontColor: "#1E2433"
+          shape: round
+        catalog:
+          backgroundColor: "#1E3A5F"
+          fontColor: "#D4AF37"
+          shape: wave
+        apis:
+          backgroundColor: "#004225"
+          fontColor: "#D4AF37"
+          shape: round
+      typography:
+        fontFamily: '"Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif'
+        htmlFontSize: 14
+        h1:
+          fontFamily: '"Palatino Linotype", Palatino, Georgia, serif'
+        h2:
+          fontFamily: '"Palatino Linotype", Palatino, Georgia, serif'
+        h3:
+          fontFamily: '"Palatino Linotype", Palatino, Georgia, serif'
+    dark:
+      variant: rhdh
+      mode: dark
+      palette:
+        primary:
+          main: "#D4AF37"
+        secondary:
+          main: "#4A6FA5"
+        background:
+          default: "#12141A"
+          paper: "#1A1E28"
+        navigation:
+          background: "#0A0E14"
+          indicator: "#E6C547"
+          color: "#E8DCC4"
+          selectedColor: "#D4AF37"
+          navItem:
+            hoverBackground: "#1E2433"
+          submenu:
+            background: "#0A0E14"
+        link: "#E6C547"
+        linkHover: "#F4E4A6"
+        gold: "#D4AF37"
+        bursts:
+          gradient:
+            linear: "linear-gradient(-137deg, #D4AF37 0%, #0F2744 100%)"
+          backgroundColor:
+            default: "#0F2744"
+          fontColor: "#F5EDD6"
+        rhdh:
+          general:
+            mainSectionBackgroundColor: "#12141A"
+            sidebarBackgroundColor: "#0A0E14"
+            cardBackgroundColor: "#1A1E28"
+            cardBorderColor: "#9A7B1A"
+            headerBottomBorderColor: "#9A7B1A"
+            searchBarBorderColor: "#3A3F4B"
+            tableRowHover: "#222836"
+          primary:
+            main: "#D4AF37"
+            focusVisibleBorder: "#F4E4A6"
+          secondary:
+            main: "#4A6FA5"
+            focusVisibleBorder: "#82A0CC"
+          cards:
+            headerBackgroundColor: "#0F2744"
+            headerTextColor: "#D4AF37"
+      defaultPageTheme: default
+      pageTheme:
+        default:
+          backgroundColor: "#0F2744"
+          fontColor: "#D4AF37"
+          shape: wave
+        home:
+          backgroundColor: "#9A7B1A"
+          fontColor: "#0A0E14"
+          shape: round
+        catalog:
+          backgroundColor: "#0F2744"
+          fontColor: "#D4AF37"
+          shape: wave
+        apis:
+          backgroundColor: "#004225"
+          fontColor: "#D4AF37"
+          shape: round
+      typography:
+        fontFamily: '"Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif'
+        htmlFontSize: 14
+        h1:
+          fontFamily: '"Palatino Linotype", Palatino, Georgia, serif'
+        h2:
+          fontFamily: '"Palatino Linotype", Palatino, Georgia, serif'
+        h3:
+          fontFamily: '"Palatino Linotype", Palatino, Georgia, serif'

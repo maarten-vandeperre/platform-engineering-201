@@ -6,6 +6,7 @@ Bootstrap runs this automatically. Manual install:
 
 ```bash
 ./scripts/install-developer-hub.sh    # operator path
+./scripts/setup-developer-hub-dynamic-plugins-cache.sh
 ./scripts/setup-developer-hub-config.sh
 ./scripts/configure-developer-hub-catalog.sh
 ```
@@ -14,6 +15,7 @@ Helm alternative:
 
 ```bash
 ./scripts/install-developer-hub-helm.sh
+./scripts/setup-developer-hub-dynamic-plugins-cache.sh
 ./scripts/setup-developer-hub-config.sh
 ./scripts/configure-developer-hub-catalog.sh
 ```
@@ -30,13 +32,62 @@ If Argo CD is ready, configure its token before or after RHDH config:
 | File | Description |
 |------|-------------|
 | `app-config-rhdh.yaml` | OIDC, catalog locations, Argo CD, Kubernetes, Tech Radar |
-| `dynamic-plugins-rhdh.yaml` | Kubernetes, Topology, Tech Radar plugins |
+| `dynamic-plugins-rhdh.yaml` | Kubernetes, Topology, Tech Radar, GitHub scaffolder plugins |
+| `dynamic-plugins-pvc.yaml` | Persistent volume claim for the dynamic plugins cache |
+| `dynamic-plugins-cache-deployment-patch.yaml` | Replaces ephemeral `dynamic-plugins-root` with the PVC |
 | `app-secrets-rhdh.yaml` | Secret template for tokens and OIDC client secret |
 | `catalog-configmap.yaml` | Inline catalog entities (component, API, template) |
 | `catalog-server.yaml` | HTTP server for catalog entities, OpenAPI file, Tech Radar JSON |
 | `backstage-cr.yaml` | `Backstage` CR — creates route, mounts config + secrets |
 
 Helm alternative: `manifests/helm/rhdh-values.yaml`
+
+## Dynamic plugins cache (faster restarts)
+
+By default, RHDH mounts `dynamic-plugins-root` as an **ephemeral** volume (`volumeClaimTemplate`). Every pod restart re-runs `install-dynamic-plugins` and re-downloads OCI plugin images (several minutes).
+
+Enable the **persistent plugins cache** once per namespace:
+
+```bash
+./scripts/setup-developer-hub-dynamic-plugins-cache.sh
+```
+
+This script:
+
+1. Creates PVC `dynamic-plugins-root` (5Gi, `ReadWriteOnce`) from [`dynamic-plugins-pvc.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-pvc.yaml)
+2. Patches the `redhat-developer-hub` Deployment to mount that PVC instead of an ephemeral claim
+3. Rolls out Developer Hub once
+
+On later restarts, when plugin packages and config checksums are unchanged, `install-dynamic-plugins` skips downloads and startup is much faster.
+
+`setup-developer-hub-config.sh` calls the cache script automatically (without an extra rollout). Config changes still trigger a single pod restart.
+
+### Script options
+
+| Option | Purpose |
+|--------|---------|
+| *(none)* | Create PVC, patch deployment, roll out once |
+| `--no-rollout` | Apply PVC/patch only; used by `setup-developer-hub-config.sh` to avoid a double restart |
+| `--force-rollout` | Restart Developer Hub even when the PVC is already mounted |
+| `--clear-lock` | Remove a stale `install-dynamic-plugins` lock file on the PVC when the init container hangs on `Waiting for lock release` (common after a crashed or killed pod) |
+
+Clear a stale lock without changing the PVC:
+
+```bash
+./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock
+```
+
+If the pod is still stuck, delete the Developer Hub pod so it recreates, or run `--clear-lock` again after the new pod is running.
+
+### Troubleshooting the plugins cache
+
+| Symptom | Fix |
+|---------|-----|
+| Init container stuck on `Waiting for lock release` | `./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock` |
+| Force re-download all plugins after config change | Delete PVC `dynamic-plugins-root` (cache rebuilds on next start) |
+| Helm install | Apply PVC + run cache script after `helm upgrade`, or use [`rhdh-values.yaml`](../../manifests/helm/rhdh-values.yaml) `extraVolumes` |
+
+See [Red Hat docs: Use the dynamic plugins cache](https://docs.redhat.com/en/documentation/red_hat_developer_hub/1.9/html/configuring_red_hat_developer_hub/use-the-dynamic-plugins-cache_configuring-rhdh).
 
 ## Authentication (Keycloak)
 
@@ -92,6 +143,14 @@ Sign in with Keycloak user **`devhub` / `r#dh@t`**.
 ./scripts/setup-developer-hub-config.sh
 ./scripts/configure-developer-hub-catalog.sh
 ```
+
+Ensure the persistent plugins cache is enabled first (one-time):
+
+```bash
+./scripts/setup-developer-hub-dynamic-plugins-cache.sh
+```
+
+Without the cache, each restart re-downloads all dynamic plugins.
 
 ## Repair Keycloak login failures
 

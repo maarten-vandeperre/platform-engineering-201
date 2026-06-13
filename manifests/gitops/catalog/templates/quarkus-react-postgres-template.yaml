@@ -1,0 +1,86 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: quarkus-react-postgres
+  title: Quarkus + React + PostgreSQL on OpenShift
+  description: Scaffold a CRUD people service similar to the workshop demo application.
+  tags:
+    - recommended
+    - java
+    - quarkus
+    - react
+    - postgres
+    - openshift
+spec:
+  owner: guests
+  type: service
+  parameters:
+    - title: Repository details
+      required:
+        - repoUrl
+        - owner
+      properties:
+        repoUrl:
+          title: Repository location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+        owner:
+          title: Component owner
+          type: string
+          description: Backstage entity owner (use guests for the workshop)
+          default: guests
+    - title: Application details
+      required:
+        - componentId
+        - description
+      properties:
+        componentId:
+          title: Component name
+          type: string
+          pattern: '^[a-z0-9-]+$'
+          description: Unique name (lowercase, hyphens; match the new repo name)
+        componentTitle:
+          title: Display title
+          type: string
+          description: Optional human-readable title (defaults to component name)
+        description:
+          title: Description
+          type: string
+          default: CRUD service generated from the Platform Engineering 201 workshop template
+  steps:
+    - id: fetch-base
+      name: Fetch base application
+      action: fetch:template
+      input:
+        url: https://github.com/maarten-vandeperre/platform-engineering-201/tree/main/apps/people-service-scaffold
+        values:
+          componentId: ${{ parameters.componentId }}
+          componentTitle: ${{ parameters.componentTitle }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+          repoOwner: ${{ parameters.repoUrl | parseRepoUrl | pick('owner') }}
+          repoName: ${{ parameters.repoUrl | parseRepoUrl | pick('repo') }}
+    - id: publish
+      name: Publish to GitHub
+      action: publish:github
+      input:
+        repoUrl: ${{ parameters.repoUrl }}
+        defaultBranch: main
+        repoVisibility: public
+        description: ${{ parameters.description }}
+    - id: register
+      name: Register in Developer Hub catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: /catalog-info.yaml
+  output:
+    links:
+      - title: Repository
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Open in catalog
+        icon: catalog
+        entityRef: ${{ steps.register.output.entityRef }}

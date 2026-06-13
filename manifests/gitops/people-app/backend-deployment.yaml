@@ -42,6 +42,8 @@ spec:
           envFrom:
             - configMapRef:
                 name: people-workshop-runtime
+            - secretRef:
+                name: people-backend-notifications
           readinessProbe:
             httpGet:
               path: /q/health/ready

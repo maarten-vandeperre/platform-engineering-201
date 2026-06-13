@@ -1,0 +1,13 @@
+# Strategic merge patch: replace ephemeral dynamic-plugins-root with named PVC.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redhat-developer-hub
+  namespace: ${RHDH_NAMESPACE}
+spec:
+  template:
+    spec:
+      volumes:
+        - name: dynamic-plugins-root
+          persistentVolumeClaim:
+            claimName: dynamic-plugins-root

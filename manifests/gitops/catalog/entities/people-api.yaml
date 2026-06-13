@@ -7,14 +7,18 @@ metadata:
   annotations:
     github.com/project-slug: ${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
     backstage.io/source-location: url:https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service/
+    orchestrator.io/workflows: '["create-person"]'
   tags:
     - openapi
     - rest
     - keycloak
   links:
-    - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
-      title: Live OpenAPI (Quarkus)
+    - url: https://redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/catalog/default/api/people-rest-api/definition
+      title: Swagger UI
       icon: docs
+    - url: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
+      title: Raw OpenAPI (YAML)
+      icon: catalog
     - url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/actions
       title: GitHub Actions
       icon: github
@@ -27,4 +31,4 @@ spec:
   owner: guests
   system: people-platform
   definition:
-    $text: https://people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/q/openapi
+    $text: https://workshop-catalog-server-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}/people-api.yaml

@@ -42,5 +42,7 @@ helm upgrade --install redhat-developer-hub "${RHDH_HELM_CHART}" \
 
 rm -f "${VALUES_FILE}"
 
+"${SCRIPTS_DIR}/setup-developer-hub-dynamic-plugins-cache.sh" || true
+
 RHDH_HOST="redhat-developer-hub-${RHDH_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
 echo "Developer Hub: https://${RHDH_HOST}"

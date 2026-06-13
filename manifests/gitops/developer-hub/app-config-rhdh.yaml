@@ -7,6 +7,15 @@ data:
   app-config-rhdh.yaml: |
     app:
       title: ${RHDH_APP_TITLE}
+      sidebar:
+        logo: true
+      extensions:
+        - entity-card:catalog-graph/relations:
+            config:
+              title: Relations
+              height: 400
+              maxDepth: 1
+        - page:catalog-graph
       baseUrl: https://PLACEHOLDER-RHDH-ROUTE
 
     backend:
@@ -25,6 +34,12 @@ data:
             options:
               secret: ${BACKEND_SECRET}
               subject: legacy-default-config
+          - type: static
+            options:
+              token: ${PEOPLE_NOTIFICATION_TOKEN}
+              subject: people-service
+            accessRestrictions:
+              - plugin: notifications
       database:
         connection:
           password: ${POSTGRESQL_ADMIN_PASSWORD}

@@ -10,6 +10,11 @@ metadata:
     sonataflow.org/version: "1.0"
     sonataflow.org/description: Create a person in the People REST API
 spec:
+  resources:
+    configMaps:
+      - configMap:
+          name: create-person-workflow-schemas
+        workflowPath: schemas
   podTemplate:
     container:
       env:
@@ -50,8 +55,8 @@ spec:
               refName: getKeycloakToken
               arguments:
                 client_id: ${KEYCLOAK_CLIENT_ID}
-                username: "${ .username }"
-                password: "${ .password }"
+                username: "${KEYCLOAK_SERVICE_USER}"
+                password: "${KEYCLOAK_SERVICE_PASSWORD}"
                 grant_type: password
             actionDataFilter:
               useResults: true

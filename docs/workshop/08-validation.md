@@ -93,10 +93,11 @@ See [04-deploy-people-app](04-deploy-people-app.md) or run `./scripts/validate-w
 | API catalog or Tech Radar empty | `./scripts/configure-developer-hub-catalog.sh` |
 | Developer Hub login/K8s/API issues | `./scripts/setup-developer-hub-config.sh` |
 | GitHub Actions CI tab / Authorize GitHub (first time) | `./scripts/create-github-oauth-app.sh --oauth-app` |
-| Re-apply existing GitHub OAuth App to Developer Hub | `./scripts/setup-github-oauth.sh` |
+| Re-apply GitHub OAuth + PAT to Developer Hub | `./scripts/setup-github-auth.sh` |
 | Developer Hub login 500 / `ECONNREFUSED :5432` | `./scripts/repair-developer-hub.sh` (RHDH PostgreSQL scaled to 0) |
 | TechDocs tab empty / build failed | `./scripts/setup-developer-hub-techdocs.sh` then `./scripts/setup-developer-hub-config.sh` |
 | Learning Paths empty | Re-run `./scripts/configure-developer-hub-catalog.sh` |
+| Orchestrator `FieldUndefined executionSummary` on All runs | Upgrade Data Index: `./scripts/setup-orchestrator.sh` (uses `registry.redhat.io/.../logic-data-index-postgresql-rhel8:1.36.0` + `QUARKUS_FLYWAY_OUT_OF_ORDER=true`) |
 | Orchestrator `ENOTFOUND sonataflow-platform-data-index-service` | `./scripts/setup-orchestrator.sh` (deploys standalone Data Index) |
 | Orchestrator empty / workflow missing | `./scripts/install-orchestrator-infra.sh` then `./scripts/setup-orchestrator.sh` |
 | Full stack after idle namespace | `./scripts/ensure-workshop-platform.sh` then `./scripts/repair-people-app.sh` and `./e2e/run-e2e.sh` |
@@ -118,9 +119,15 @@ REPAIR_RESET_POSTGRES_DATA=true ./scripts/repair-people-app.sh
 | Image pull error for GHCR | Use OpenShift builds (default) or add `imagePullSecrets` |
 | Argo CD 403 in Developer Hub | `./scripts/setup-argocd-token.sh` |
 | GitHub Actions tab empty | Set valid `GITHUB_TOKEN` in secrets |
+| Scaffolder Fetch skeleton 401 on `api.github.com` | Re-run `./scripts/configure-developer-hub-catalog.sh` (skeleton is served from catalog server) |
+| Scaffolder Publish to GitHub 401 | Run `./scripts/setup-github-auth.sh` with a PAT that has `repo` scope |
+| Scaffolder `No token available for host: github.com` | Run `./scripts/setup-github-auth.sh` (PAT missing from cluster app-config) |
+| Scaffolder `publish:github` not registered | Enable `backstage-plugin-scaffolder-backend-module-github-dynamic` in `dynamic-plugins-rhdh.yaml`, run `./scripts/setup-developer-hub-config.sh` |
+| Developer Hub restart very slow | Run once: `./scripts/setup-developer-hub-dynamic-plugins-cache.sh` (persistent PVC for `dynamic-plugins-root`) |
+| `install-dynamic-plugins` stuck on `Waiting for lock release` | `./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock` (removes stale lock on PVC; see [06-install-developer-hub.md](06-install-developer-hub.md#script-options)) |
 | GitHub Actions Authorize popup 404 (`client_id=changeme`) | `./scripts/create-github-oauth-app.sh --oauth-app` |
 | GitHub Actions "Unknown auth provider github" | `./scripts/create-github-oauth-app.sh --oauth-app` then `./scripts/setup-developer-hub-config.sh` |
-| Lost OAuth client secret | Regenerate in GitHub app settings, update `workshop.env`, run `./scripts/setup-github-oauth.sh` |
+| Lost OAuth client secret | Regenerate in GitHub app settings, update `workshop.env`, run `./scripts/setup-github-auth.sh --oauth-only` |
 | Developer Hub login 500 (`ECONNREFUSED :5432`) | `./scripts/repair-developer-hub.sh` |
 | Catalog entity missing | `./scripts/configure-developer-hub-catalog.sh` |
 | API listing empty | Ensure catalog server is running (`oc get deploy workshop-catalog-server`) |

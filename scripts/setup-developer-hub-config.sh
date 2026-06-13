@@ -15,6 +15,7 @@ resolve_keycloak_urls
 
 "${SCRIPTS_DIR}/configure-keycloak-realm.sh"
 "${SCRIPTS_DIR}/setup-developer-hub-kubernetes.sh"
+"${SCRIPTS_DIR}/setup-developer-hub-dynamic-plugins-cache.sh" --no-rollout
 
 export K8S_CLUSTER_NAME="${K8S_CLUSTER_NAME:-openshift}"
 export K8S_CLUSTER_URL="${K8S_CLUSTER_URL:-https://kubernetes.default.svc}"
@@ -66,6 +67,7 @@ if [[ -z "${BACKEND_SECRET:-}" ]] && oc get secret redhat-developer-hub-auth -n 
   BACKEND_SECRET=$(oc get secret redhat-developer-hub-auth -n "${RHDH_NAMESPACE}" -o jsonpath='{.data.backend-secret}' | base64 -d)
 fi
 export BACKEND_SECRET="${BACKEND_SECRET:-workshop-backend-secret}"
+export PEOPLE_NOTIFICATION_TOKEN="${PEOPLE_NOTIFICATION_TOKEN:-${BACKEND_SECRET}}"
 export GITHUB_TOKEN="${GITHUB_TOKEN:-changeme}"
 export AUTH_GITHUB_CLIENT_ID="${AUTH_GITHUB_CLIENT_ID:-changeme}"
 export AUTH_GITHUB_CLIENT_SECRET="${AUTH_GITHUB_CLIENT_SECRET:-changeme}"
@@ -103,13 +105,55 @@ oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
   --from-literal=RHDH_OIDC_CLIENT_SECRET="${RHDH_OIDC_CLIENT_SECRET}" \
   --dry-run=client -o yaml | oc apply -f -
 
+strip_placeholder_github_token() {
+  local file="$1"
+  if [[ "${GITHUB_TOKEN:-changeme}" != "changeme" ]]; then
+    return 0
+  fi
+  # Invalid PAT breaks public GitHub reads (401). Omit token so fetch:template works.
+  perl -pi -e 's/^\s*token: changeme\s*\n//' "${file}"
+  perl -pi -e 's/^\s*Authorization: Bearer changeme\s*\n//' "${file}"
+}
+
 render_app_config() {
+  local branding_dir="${MANIFESTS_DIR}/developer-hub/branding"
+  export EGYPTIAN_FULL_LOGO="data:image/svg+xml;base64,$(base64 < "${branding_dir}/egyptian-full-logo.svg" | tr -d '\n')"
+  export EGYPTIAN_ICON_LOGO="data:image/svg+xml;base64,$(base64 < "${branding_dir}/egyptian-icon-logo.svg" | tr -d '\n')"
+
+  local base_file theme_file merged_file
+  base_file="$(mktemp)"
+  theme_file="$(mktemp)"
+  merged_file="$(mktemp)"
+  trap 'rm -f "${base_file}" "${theme_file}" "${merged_file}"' RETURN
+
   envsubst \
-    '${RHDH_APP_TITLE} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${AUTH_GITHUB_CLIENT_ID} ${AUTH_GITHUB_CLIENT_SECRET} ${CLUSTER_ROUTER_BASE} ${WORKSHOP_NAMESPACE} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${BACKEND_SECRET} ${POSTGRESQL_ADMIN_PASSWORD} ${K8S_CLUSTER_TOKEN}' \
+    '${RHDH_APP_TITLE} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${AUTH_GITHUB_CLIENT_ID} ${AUTH_GITHUB_CLIENT_SECRET} ${CLUSTER_ROUTER_BASE} ${WORKSHOP_NAMESPACE} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${BACKEND_SECRET} ${PEOPLE_NOTIFICATION_TOKEN} ${POSTGRESQL_ADMIN_PASSWORD} ${K8S_CLUSTER_TOKEN}' \
     <"${MANIFESTS_DIR}/developer-hub/app-config-rhdh.yaml" \
     | sed "s|PLACEHOLDER-RHDH-ROUTE|${RHDH_HOST}|g" \
     | sed "s|PLACEHOLDER-CATALOG-URL|${CATALOG_URL}|g" \
-    | awk '/app-config-rhdh.yaml: \|/{flag=1;next} flag{sub(/^    /,""); print}'
+    | awk '/app-config-rhdh.yaml: \|/{flag=1;next} flag{sub(/^    /,""); print}' >"${base_file}"
+
+  strip_placeholder_github_token "${base_file}"
+
+  envsubst '${EGYPTIAN_FULL_LOGO} ${EGYPTIAN_ICON_LOGO}' \
+    <"${MANIFESTS_DIR}/developer-hub/egyptian-theme.yaml" \
+    | sed 's/^/  /' >"${theme_file}"
+
+  awk -v theme_file="${theme_file}" '
+    /^  sidebar:/ { in_sidebar=1 }
+    in_sidebar && /^    logo:/ {
+      print
+      while ((getline line < theme_file) > 0) {
+        print line
+      }
+      close(theme_file)
+      in_sidebar=0
+      next
+    }
+    { print }
+  ' "${base_file}" >"${merged_file}"
+
+  cat "${merged_file}"
 }
 
 render_dynamic_plugins() {
@@ -172,12 +216,20 @@ echo ""
 echo "Developer Hub: https://${RHDH_HOST}"
 echo "Sign in with Keycloak user ${RHDH_KEYCLOAK_USER} / (password from workshop.env)"
 
+if [[ "${GITHUB_TOKEN:-changeme}" == "changeme" ]]; then
+  echo ""
+  echo "WARNING: GITHUB_TOKEN is still 'changeme'."
+  echo "Scaffolder 'Publish to GitHub' will fail with 'No token available for host: github.com' until you run:"
+  echo "  ./scripts/setup-github-auth.sh"
+fi
+
 if [[ "${AUTH_GITHUB_CLIENT_ID:-changeme}" == "changeme" ]] \
   || [[ "${AUTH_GITHUB_CLIENT_SECRET:-changeme}" == "changeme" ]]; then
   echo ""
   echo "WARNING: GitHub OAuth is not configured (AUTH_GITHUB_CLIENT_ID/SECRET still 'changeme')."
-  echo "The CI tab Authorize GitHub popup will fail with GitHub 404 until you run:"
-  echo "  ./scripts/setup-github-oauth.sh"
+  echo "The CI tab Authorize GitHub popup will fail until you run:"
+  echo "  ./scripts/setup-github-auth.sh --oauth-only"
+  echo "  ./scripts/create-github-oauth-app.sh --oauth-app"
   echo "Callback URL: https://${RHDH_HOST}/api/auth/github/handler/frame"
 fi
 

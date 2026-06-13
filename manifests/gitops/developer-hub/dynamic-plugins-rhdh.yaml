@@ -71,8 +71,37 @@ data:
         disabled: false
       - package: ./dynamic-plugins/dist/backstage-plugin-signals-backend-dynamic
         disabled: false
+      - package: ./dynamic-plugins/dist/backstage-plugin-scaffolder-backend-module-github-dynamic
+        disabled: false
       - package: 'oci://registry.access.redhat.com/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator:{{inherit}}'
         disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              red-hat-developer-hub.backstage-plugin-orchestrator:
+                appIcons:
+                  - name: orchestratorIcon
+                    importName: OrchestratorIcon
+                dynamicRoutes:
+                  - path: /orchestrator
+                    importName: OrchestratorPage
+                    menuItem:
+                      icon: orchestratorIcon
+                      text: Orchestrator
+                entityTabs:
+                  - path: /workflows
+                    title: Workflows
+                    titleKey: catalog.entityPage.workflows.title
+                    mountPoint: entity.page.workflows
+                mountPoints:
+                  - mountPoint: entity.page.workflows/cards
+                    importName: OrchestratorCatalogTab
+                    config:
+                      layout:
+                        gridColumn: "1 / -1"
+                      if:
+                        anyOf:
+                          - IsOrchestratorCatalogTabAvailable
       - package: 'oci://registry.access.redhat.com/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-backend:{{inherit}}'
         disabled: false
         dependencies:

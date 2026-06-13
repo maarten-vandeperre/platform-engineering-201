@@ -1,6 +1,7 @@
 # Standalone SonataFlow Data Index for Developer Hub Orchestrator.
 # Used when OpenShift Serverless Logic is not installed (no SonataFlowPlatform CR).
 # Creates sonataflow-platform-data-index-service expected by app-config-rhdh.yaml.
+# Image must include ProcessInstance.executionSummary in GraphQL (RHDH 1.9 Orchestrator plugin).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -106,13 +107,13 @@ spec:
               value: postgresql
             - name: QUARKUS_HIBERNATE_ORM_DATABASE_GENERATION
               value: update
-            - name: QUARKUS_KAFKA_HEALTH_ENABLE
-              value: "false"
             - name: QUARKUS_HTTP_CORS
               value: "true"
             - name: QUARKUS_HTTP_CORS_ORIGINS
               value: /.*/
             - name: QUARKUS_FLYWAY_MIGRATE_AT_START
+              value: "true"
+            - name: QUARKUS_FLYWAY_OUT_OF_ORDER
               value: "true"
             - name: KOGITO_DATA_INDEX_QUARKUS_PROFILE
               value: http-events-support

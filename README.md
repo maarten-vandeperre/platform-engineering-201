@@ -4,7 +4,8 @@ Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Q
 
 ## Start here
 
-- [Workshop guide](docs/workshop/README.md) — full Day 0 → Done path
+- **[Complete tutorial](docs/workshop/TUTORIAL.md)** — clean sandbox → full workshop state (commands, rationale, config links)
+- [Workshop guide index](docs/workshop/README.md) — module index and quick reference
 
 ## Quick deploy (empty namespace)
 

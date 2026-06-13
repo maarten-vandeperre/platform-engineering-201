@@ -1,0 +1,325 @@
+# Organization catalog model: 1 org, 3 teams, 8 users, 2 platforms, 4 applications,
+# PostgreSQL database, Keycloak security, and Kafka (order-processor + topics).
+# See manifests/gitops/catalog/diagrams/organization-entity-diagram.md for the diagram.
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: nile-digital
+  title: Nile Digital
+  description: Root organization for the workshop platform estate.
+spec:
+  type: root-organization
+  profile:
+    displayName: Nile Digital
+  children:
+    - platform-team
+    - product-team
+    - data-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-team
+  title: Platform Engineering
+  description: Internal developer platform, GitOps, and shared services.
+spec:
+  type: team
+  parent: nile-digital
+  children: []
+  members:
+    - alice-chen
+    - bob-martin
+    - carol-rivera
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: product-team
+  title: Product Delivery
+  description: Customer-facing APIs and business applications.
+spec:
+  type: team
+  parent: nile-digital
+  children: []
+  members:
+    - dave-kumar
+    - eve-johnson
+    - frank-okonkwo
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: data-team
+  title: Data & Integration
+  description: Event streaming, analytics pipelines, and integration services.
+spec:
+  type: team
+  parent: nile-digital
+  children: []
+  members:
+    - grace-lombardi
+    - henry-petrov
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: alice-chen
+  title: Alice Chen
+spec:
+  profile:
+    displayName: Alice Chen
+    email: alice.chen@example.com
+  memberOf:
+    - platform-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: bob-martin
+  title: Bob Martin
+spec:
+  profile:
+    displayName: Bob Martin
+    email: bob.martin@example.com
+  memberOf:
+    - platform-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: carol-rivera
+  title: Carol Rivera
+spec:
+  profile:
+    displayName: Carol Rivera
+    email: carol.rivera@example.com
+  memberOf:
+    - platform-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: dave-kumar
+  title: Dave Kumar
+spec:
+  profile:
+    displayName: Dave Kumar
+    email: dave.kumar@example.com
+  memberOf:
+    - product-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: eve-johnson
+  title: Eve Johnson
+spec:
+  profile:
+    displayName: Eve Johnson
+    email: eve.johnson@example.com
+  memberOf:
+    - product-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: frank-okonkwo
+  title: Frank Okonkwo
+spec:
+  profile:
+    displayName: Frank Okonkwo
+    email: frank.okonkwo@example.com
+  memberOf:
+    - product-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: grace-lombardi
+  title: Grace Lombardi
+spec:
+  profile:
+    displayName: Grace Lombardi
+    email: grace.lombardi@example.com
+  memberOf:
+    - data-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: henry-petrov
+  title: Henry Petrov
+spec:
+  profile:
+    displayName: Henry Petrov
+    email: henry.petrov@example.com
+  memberOf:
+    - data-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: integration-platform
+  title: Integration Platform
+  description: Event-driven integration layer with Kafka messaging.
+spec:
+  owner: data-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: workshop-postgresql
+  title: Workshop PostgreSQL
+  description: Shared PostgreSQL cluster for transactional applications.
+  tags:
+    - postgres
+    - database
+spec:
+  type: database
+  owner: platform-team
+  system: people-platform
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: workshop-keycloak
+  title: Workshop Keycloak
+  description: OIDC provider securing all workshop applications.
+  links:
+    - url: ${KEYCLOAK_URL}
+      title: Keycloak admin console
+      icon: user
+  tags:
+    - keycloak
+    - oidc
+    - security
+spec:
+  type: auth-provider
+  owner: platform-team
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: workshop-kafka
+  title: Workshop Kafka Cluster
+  description: Apache Kafka cluster for asynchronous integration.
+  tags:
+    - kafka
+    - messaging
+spec:
+  type: messagebroker
+  owner: data-team
+  system: integration-platform
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: person-events-topic
+  title: person-events
+  description: Domain events emitted when a person record is created or updated.
+  tags:
+    - kafka
+    - topic
+spec:
+  type: topic
+  owner: data-team
+  system: integration-platform
+  dependsOn:
+    - resource:default/workshop-kafka
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: order-events-topic
+  title: order-events
+  description: Order lifecycle events consumed by downstream processors.
+  tags:
+    - kafka
+    - topic
+spec:
+  type: topic
+  owner: data-team
+  system: integration-platform
+  dependsOn:
+    - resource:default/workshop-kafka
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: billing-service
+  title: Billing Service
+  description: Invoices and payment status API backed by PostgreSQL.
+  tags:
+    - java
+    - postgres
+    - keycloak
+spec:
+  type: service
+  lifecycle: production
+  owner: product-team
+  system: people-platform
+  dependsOn:
+    - resource:default/workshop-postgresql
+    - resource:default/workshop-keycloak
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: inventory-service
+  title: Inventory Service
+  description: Stock and warehouse API backed by PostgreSQL.
+  tags:
+    - java
+    - postgres
+    - keycloak
+spec:
+  type: service
+  lifecycle: production
+  owner: product-team
+  system: people-platform
+  dependsOn:
+    - resource:default/workshop-postgresql
+    - resource:default/workshop-keycloak
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: order-processor
+  title: Order Processor
+  description: Event-driven order workflow; publishes and consumes Kafka topics.
+  tags:
+    - kafka
+    - quarkus
+    - keycloak
+spec:
+  type: service
+  lifecycle: production
+  owner: data-team
+  system: integration-platform
+  dependsOn:
+    - resource:default/workshop-kafka
+    - resource:default/person-events-topic
+    - resource:default/order-events-topic
+    - resource:default/workshop-keycloak

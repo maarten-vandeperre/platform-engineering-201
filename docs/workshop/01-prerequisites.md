@@ -32,9 +32,23 @@ Fork [platform-engineering-201](https://github.com/maarten-vandeperre/platform-e
 - `scripts/workshop.env` — git repo URL, GitHub org, `CLUSTER_ROUTER_BASE`
 - `manifests/gitops/catalog/entities/people-service.yaml` — `github.com/project-slug` annotation
 
-## GitHub token (optional but recommended)
+## GitHub token (required for scaffolder publish)
 
-For **scaffolder publish** and server-side GitHub API calls in Developer Hub, create a GitHub Personal Access Token with:
+The scaffolder **Fetch skeleton** step reads from GitHub without a PAT (public repo). **Publish to GitHub** requires a server-side PAT with `repo` scope.
+
+Configure OAuth and PAT together:
+
+```bash
+./scripts/setup-github-auth.sh --open-pat-url
+```
+
+Or set the token explicitly:
+
+```bash
+GITHUB_TOKEN=ghp_... ./scripts/setup-github-auth.sh --no-interactive
+```
+
+Create a classic PAT at [github.com/settings/tokens](https://github.com/settings/tokens/new?scopes=repo,workflow) with:
 
 - `repo` (for private repos) or public repo access
 - `workflow` (read Actions)
@@ -88,7 +102,7 @@ The **GitHub Actions CI tab** prompts users to **Authorize GitHub** in a popup. 
 
    ```bash
    source scripts/workshop.env
-   ./scripts/setup-github-oauth.sh
+   ./scripts/setup-github-auth.sh --oauth-only
    ```
 
 If `client_id=changeme` appears in the authorize URL, GitHub returns **404** — run `./scripts/create-github-oauth-app.sh --oauth-app` first.
@@ -100,12 +114,12 @@ The create script **does not delete** OAuth Apps on GitHub. To reuse an app you 
 ```bash
 # credentials already in scripts/workshop.env
 source scripts/workshop.env
-./scripts/setup-github-oauth.sh
+./scripts/setup-github-auth.sh --oauth-only
 ```
 
 Use `./scripts/create-github-oauth-app.sh` only for **first-time setup** or when you need **new** credentials. Re-running `--oauth-app` opens the registration form again; paste your existing Client ID and secret instead of creating a duplicate app.
 
-If you lost the client secret, generate a new one on the [OAuth App settings page](https://github.com/settings/developers), update `AUTH_GITHUB_CLIENT_SECRET` in `workshop.env`, then run `./scripts/setup-github-oauth.sh`.
+If you lost the client secret, generate a new one on the [OAuth App settings page](https://github.com/settings/developers), update `AUTH_GITHUB_CLIENT_SECRET` in `workshop.env`, then run `./scripts/setup-github-auth.sh --oauth-only`.
 
 ## Namespace and cluster domain
 

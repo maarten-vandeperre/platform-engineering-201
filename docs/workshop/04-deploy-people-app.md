@@ -71,7 +71,8 @@ Open the frontend route in a browser and sign in as `user` / `r3dh@t`.
 | `apps/people-service/backend/` | Quarkus REST API with OIDC, Flyway migration, Panache entity |
 | `apps/people-service/frontend/` | React CRUD UI with Keycloak login |
 | `apps/people-service/openapi/people-api.yaml` | Static OpenAPI reference copy |
-| `apps/people-service/catalog-info.yaml` | Backstage component metadata for scaffolder output |
+| `apps/people-service/catalog-info.yaml` | Backstage component metadata for the workshop demo |
+| `apps/people-service-scaffold/catalog-info.yaml` | Templated catalog metadata used by the Developer Hub scaffolder |
 
 ## Repair
 

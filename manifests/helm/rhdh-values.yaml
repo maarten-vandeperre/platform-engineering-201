@@ -1,11 +1,37 @@
 # Helm values snippet for Red Hat Developer Hub with Keycloak SSO
 # Use with: helm upgrade redhat-developer-hub <chart> -f manifests/helm/rhdh-values.yaml
+#
+# Before or after Helm install, enable the dynamic plugins cache PVC:
+#   ./scripts/setup-developer-hub-dynamic-plugins-cache.sh
 
 global:
   clusterRouterBase: ${CLUSTER_ROUTER_BASE}
 
 upstream:
   backstage:
+    extraVolumes:
+      - name: dynamic-plugins-root
+        persistentVolumeClaim:
+          claimName: dynamic-plugins-root
+      - name: dynamic-plugins
+        configMap:
+          defaultMode: 420
+          name: redhat-developer-hub-dynamic-plugins
+          optional: true
+      - name: dynamic-plugins-npmrc
+        secret:
+          defaultMode: 420
+          optional: true
+          secretName: redhat-developer-hub-dynamic-plugins-npmrc
+      - name: dynamic-plugins-registry-auth
+        secret:
+          defaultMode: 416
+          optional: true
+          secretName: redhat-developer-hub-dynamic-plugins-registry-auth
+      - name: npmcacache
+        emptyDir: {}
+      - name: temp
+        emptyDir: {}
     appConfig:
       app:
         title: ${RHDH_APP_TITLE}

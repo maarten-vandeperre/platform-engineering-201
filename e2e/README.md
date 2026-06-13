@@ -13,6 +13,8 @@ Selenium and HTTP tests validate the People Service, Keycloak, OpenAPI, Develope
 ./scripts/repair-keycloak.sh
 ./scripts/repair-people-app.sh
 ./scripts/repair-developer-hub.sh
+./scripts/setup-developer-hub-dynamic-plugins-cache.sh   # one-time, faster restarts
+# ./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock   # stale install lock
 ./scripts/configure-developer-hub-catalog.sh
 ./scripts/setup-developer-hub-config.sh
 ```
@@ -58,3 +60,4 @@ E2E_HEADLESS=false ./e2e/run-e2e.sh
 9. Developer Hub API catalog lists **People REST API**.
 10. Developer Hub **CI** tab on the People REST API entity loads GitHub Actions content.
 11. Developer Hub Tech Radar page loads workshop technologies.
+12. Developer Hub scaffolder exposes `publish:github` and lists the Quarkus template.

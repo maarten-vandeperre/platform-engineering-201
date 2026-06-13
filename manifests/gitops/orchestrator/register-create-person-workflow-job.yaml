@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: register-create-person-workflow
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+    app.kubernetes.io/component: orchestrator
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 6
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: developer-hub
+        app.kubernetes.io/component: orchestrator
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: register
+          image: registry.redhat.io/rhel9/postgresql-16:latest
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          env:
+            - name: DATA_INDEX_URL
+              value: http://sonataflow-platform-data-index-service:8080
+            - name: WORKFLOW_SERVICE_URL
+              value: http://create-person-workflow:8080
+            - name: WORKFLOW_FILE
+              value: /workflow/create-person.sw.yaml
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redhat-developer-hub-postgresql-svcbind-postgres
+                  key: password
+          command:
+            - bash
+            - /scripts/register-workflow.sh
+          volumeMounts:
+            - name: workflow-definition
+              mountPath: /workflow
+            - name: register-script
+              mountPath: /scripts
+      volumes:
+        - name: workflow-definition
+          configMap:
+            name: create-person-workflow-definition
+        - name: register-script
+          configMap:
+            name: create-person-workflow-register
+            defaultMode: 0755

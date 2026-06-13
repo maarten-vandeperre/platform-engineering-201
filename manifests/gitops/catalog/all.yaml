@@ -5,6 +5,8 @@ metadata:
   description: Platform Engineering 201 workshop catalog
 spec:
   targets:
+    - ./entities/organization-model.yaml
+    - ./entities/workshop-organization.yaml
     - ./entities/people-service.yaml
     - ./entities/people-api.yaml
     - ./templates/quarkus-react-postgres-template.yaml

@@ -1,0 +1,67 @@
+# Workshop organization: parent group and Workshop Team members for catalog ownership graphs.
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: maartens-organization
+  title: Maarten's Organization
+  description: Root organization for the Platform Engineering 201 workshop catalog.
+spec:
+  type: root-organization
+  profile:
+    displayName: Maarten's Organization
+  children:
+    - guests
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: maarten-vandeperre
+  title: Maarten Vandeperre
+spec:
+  profile:
+    displayName: Maarten Vandeperre
+    email: maarten.vandeperre@example.com
+  memberOf:
+    - guests
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: sophie-lambert
+  title: Sophie Lambert
+spec:
+  profile:
+    displayName: Sophie Lambert
+    email: sophie.lambert@example.com
+  memberOf:
+    - guests
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: tom-de-vries
+  title: Tom de Vries
+spec:
+  profile:
+    displayName: Tom de Vries
+    email: tom.devries@example.com
+  memberOf:
+    - guests
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: User
+metadata:
+  name: nina-bakker
+  title: Nina Bakker
+spec:
+  profile:
+    displayName: Nina Bakker
+    email: nina.bakker@example.com
+  memberOf:
+    - guests

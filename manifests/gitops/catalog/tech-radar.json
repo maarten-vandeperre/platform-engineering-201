@@ -1,12 +1,36 @@
 {
   "entries": [
     {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "java-21",
+      "id": "java-21",
+      "title": "Java 21 LTS",
+      "quadrant": "languages",
+      "description": "Current LTS baseline at Devoxx and Voxxed: virtual threads, pattern matching, and records for cloud-native services."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "adopt", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "kotlin",
+      "id": "kotlin",
+      "title": "Kotlin",
+      "quadrant": "languages",
+      "description": "JVM language with first-class presence on Devoxx stages; strong fit for concise services and multiplatform experiments."
+    },
+    {
       "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
       "key": "quarkus",
       "id": "quarkus",
       "title": "Quarkus",
       "quadrant": "frameworks",
-      "description": "Supersonic subatomic Java framework used for the People REST API."
+      "description": "Cloud-native Java stack featured in Red Hat and community conference labs; powers the workshop People REST API."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "adopt", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "spring-boot",
+      "id": "spring-boot",
+      "title": "Spring Boot 3",
+      "quadrant": "frameworks",
+      "description": "Dominant Java application framework at Voxxed and Devoxx; Jakarta EE baseline with mature observability and data integrations."
     },
     {
       "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
@@ -14,15 +38,15 @@
       "id": "react",
       "title": "React",
       "quadrant": "frameworks",
-      "description": "Frontend UI for the People CRUD workshop application."
+      "description": "Component model for modern web UIs; common choice in full-stack and frontend tracks at European developer conferences."
     },
     {
-      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
-      "key": "postgresql",
-      "id": "postgresql",
-      "title": "PostgreSQL",
+      "timeline": [{ "moved": 1, "ringId": "adopt", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "kubernetes",
+      "id": "kubernetes",
+      "title": "Kubernetes",
       "quadrant": "infrastructure",
-      "description": "Relational database backing the People Service."
+      "description": "De facto runtime for conference demos on cloud-native Java, GitOps, and platform engineering."
     },
     {
       "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
@@ -30,7 +54,15 @@
       "id": "openshift",
       "title": "OpenShift",
       "quadrant": "infrastructure",
-      "description": "Container platform hosting the workshop workloads."
+      "description": "Enterprise Kubernetes platform used in workshop deployments and frequent Voxxed hands-on sessions."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
+      "key": "postgresql",
+      "id": "postgresql",
+      "title": "PostgreSQL",
+      "quadrant": "infrastructure",
+      "description": "Relational database of choice for persistence talks, Testcontainers workshops, and the People Service."
     },
     {
       "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
@@ -38,7 +70,15 @@
       "id": "keycloak",
       "title": "Keycloak",
       "quadrant": "infrastructure",
-      "description": "OIDC provider securing the People API and Developer Hub."
+      "description": "OIDC/OAuth2 provider recurring in security and identity sessions; secures the workshop stack."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "adopt", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "kafka",
+      "id": "kafka",
+      "title": "Apache Kafka",
+      "quadrant": "infrastructure",
+      "description": "Event streaming backbone in microservices, CQRS, and reactive architecture talks at Devoxx."
     },
     {
       "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
@@ -46,7 +86,7 @@
       "id": "argocd",
       "title": "Argo CD",
       "quadrant": "infrastructure",
-      "description": "GitOps continuous delivery for the People Service manifests."
+      "description": "GitOps continuous delivery aligned with platform engineering narratives at Voxxed and Devoxx."
     },
     {
       "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
@@ -54,7 +94,23 @@
       "id": "developer-hub",
       "title": "Red Hat Developer Hub",
       "quadrant": "infrastructure",
-      "description": "Internal developer portal with catalog, templates, and Kubernetes views."
+      "description": "Internal developer portal (Backstage) for catalog, templates, Tech Radar, and golden paths — a platform engineering showcase."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "adopt", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "opentelemetry",
+      "id": "opentelemetry",
+      "title": "OpenTelemetry",
+      "quadrant": "infrastructure",
+      "description": "Vendor-neutral observability standard replacing one-off tracing talks; pairs with Micrometer and Quarkus/Spring."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "adopt", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "junit5",
+      "id": "junit5",
+      "title": "JUnit 5",
+      "quadrant": "frameworks",
+      "description": "Default unit and integration testing stack in virtually every Java conference lab and codebase."
     },
     {
       "timeline": [{ "moved": 0, "ringId": "trial", "date": "2026-01-01T00:00:00.000Z" }],
@@ -62,47 +118,175 @@
       "id": "openapi",
       "title": "OpenAPI",
       "quadrant": "process",
-      "description": "Machine-readable API contracts published from the People backend."
+      "description": "Contract-first API design promoted in microservices and API craftsmanship sessions; published from the People backend."
     },
     {
-      "timeline": [{ "moved": 0, "ringId": "assess", "date": "2026-01-01T00:00:00.000Z" }],
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
       "key": "testcontainers",
       "id": "testcontainers",
       "title": "Testcontainers",
       "quadrant": "frameworks",
-      "description": "Candidate for integration testing PostgreSQL dependencies locally."
+      "description": "Integration testing with real PostgreSQL, Kafka, and Keycloak containers — a Devoxx crowd favorite since 2019."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "langchain4j",
+      "id": "langchain4j",
+      "title": "LangChain4j",
+      "quadrant": "frameworks",
+      "description": "Java framework for LLM-powered features; dominant AI-for-developers topic at recent Devoxx and Voxxed editions."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "graalvm-native",
+      "id": "graalvm-native",
+      "title": "GraalVM Native Image",
+      "quadrant": "frameworks",
+      "description": "Ahead-of-time compilation for fast startup and lower memory — recurring Quarkus and Micronaut conference deep dives."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "virtual-threads",
+      "id": "virtual-threads",
+      "title": "Virtual Threads",
+      "quadrant": "languages",
+      "description": "Project Loom in Java 21+; high-throughput I/O without reactive complexity — headline topic since Devoxx 2023."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "ai-assisted-dev",
+      "id": "ai-assisted-dev",
+      "title": "AI-Assisted Development",
+      "quadrant": "process",
+      "description": "Copilot-style coding assistants and in-IDE agents reshaping how teams build and review software at conference keynotes."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "platform-engineering",
+      "id": "platform-engineering",
+      "title": "Platform Engineering",
+      "quadrant": "process",
+      "description": "Product-minded internal platforms, golden paths, and IDPs — growing track at Voxxed Days and Devoxx Belgium."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "github-actions",
+      "id": "github-actions",
+      "title": "GitHub Actions",
+      "quadrant": "process",
+      "description": "CI/CD pipelines for Java and frontend builds; integrated in the workshop via the Developer Hub CI tab."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "serverless-workflows",
+      "id": "serverless-workflows",
+      "title": "Serverless Workflows",
+      "quadrant": "process",
+      "description": "CNCF Serverless Workflow spec and SonataFlow for orchestrating multi-step processes — used in the create-person workshop flow."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "trial", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "micronaut",
+      "id": "micronaut",
+      "title": "Micronaut",
+      "quadrant": "frameworks",
+      "description": "Compile-time dependency injection and GraalVM-friendly microservices; regular alternative to Quarkus in conference comparisons."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "assess", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "spring-ai",
+      "id": "spring-ai",
+      "title": "Spring AI",
+      "quadrant": "frameworks",
+      "description": "Spring ecosystem approach to LLM integration; assess alongside LangChain4j for new AI features."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "assess", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "webassembly",
+      "id": "webassembly",
+      "title": "WebAssembly",
+      "quadrant": "languages",
+      "description": "Portable bytecode for browser and server runtimes; emerging in performance and polyglot talks at Voxxed frontend tracks."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "assess", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "angular",
+      "id": "angular",
+      "title": "Angular",
+      "quadrant": "frameworks",
+      "description": "Enterprise SPA framework still featured in full-stack conference sessions; assess for greenfield UIs vs React."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "assess", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "wasm-java",
+      "id": "wasm-java",
+      "title": "Java on WASM",
+      "quadrant": "languages",
+      "description": "Experimental GraalWasm and TeaVM paths for running JVM languages in the browser — early-stage conference demos."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "assess", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "eclipse-store",
+      "id": "eclipse-store",
+      "title": "Eclipse Store",
+      "quadrant": "frameworks",
+      "description": "Object persistence engine gaining attention in Java performance and architecture sessions as an alternative to ORM-heavy stacks."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "hold", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "java-8",
+      "id": "java-8",
+      "title": "Java 8",
+      "quadrant": "languages",
+      "description": "Legacy baseline without virtual threads or modern security updates — avoid for new services discussed at current conferences."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "hold", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "manual-deployments",
+      "id": "manual-deployments",
+      "title": "Manual kubectl deploys",
+      "quadrant": "process",
+      "description": "Imperative one-off deployments without GitOps; contradicts platform engineering practices promoted at Devoxx."
+    },
+    {
+      "timeline": [{ "moved": 1, "ringId": "hold", "date": "2026-06-01T00:00:00.000Z" }],
+      "key": "shared-db-antipattern",
+      "id": "shared-db-antipattern",
+      "title": "Shared-database microservices",
+      "quadrant": "process",
+      "description": "Tight coupling via a single schema across services — repeatedly flagged as an anti-pattern in distributed systems talks."
     }
   ],
   "quadrants": [
-    { "id": "infrastructure", "name": "Infrastructure" },
-    { "id": "frameworks", "name": "Frameworks" },
-    { "id": "languages", "name": "Languages" },
-    { "id": "process", "name": "Process" }
+    { "id": "infrastructure", "name": "Infrastructure & Platforms" },
+    { "id": "frameworks", "name": "Frameworks & Libraries" },
+    { "id": "languages", "name": "Languages & Runtimes" },
+    { "id": "process", "name": "Techniques & Practices" }
   ],
   "rings": [
     {
       "id": "adopt",
       "name": "ADOPT",
       "color": "#5BA300",
-      "description": "Technologies we use and recommend for the workshop."
+      "description": "Production-ready staples you hear in keynotes and repeat across Devoxx and Voxxed editions."
     },
     {
       "id": "trial",
       "name": "TRIAL",
       "color": "#009EB0",
-      "description": "Worth pursuing with a clear goal and limited scope."
+      "description": "Hot conference tracks worth piloting on a real team with a clear learning goal."
     },
     {
       "id": "assess",
       "name": "ASSESS",
       "color": "#C7BA00",
-      "description": "Worth exploring to understand impact on the platform."
+      "description": "Emerging topics from recent labs and BOF sessions — explore before committing."
     },
     {
       "id": "hold",
       "name": "HOLD",
       "color": "#E09B96",
-      "description": "Proceed with caution or avoid for new work."
+      "description": "Patterns conference speakers warn against for new greenfield work."
     }
   ]
 }

@@ -38,6 +38,13 @@ build_flat_techdocs_configmap "quarkus-guide"
 build_flat_techdocs_configmap "adrs"
 
 echo "Patching Developer Hub deployment with TechDocs init container..."
+if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" \
+  -o jsonpath='{.spec.template.metadata.annotations.workshop\.platform-engineering/techdocs}' 2>/dev/null \
+  | grep -q enabled; then
+  echo "TechDocs init container already configured; skipping deployment rollout."
+  exit 0
+fi
+
 replicas="$(oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" -o jsonpath='{.spec.replicas}')"
 if [[ -z "${replicas}" || "${replicas}" == "0" ]]; then
   replicas=1

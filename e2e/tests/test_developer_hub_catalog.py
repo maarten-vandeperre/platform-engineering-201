@@ -50,6 +50,44 @@ def test_developer_hub_api_catalog_listing(workshop_config, ready_stack, driver)
 
 
 @pytest.mark.e2e
+def test_developer_hub_api_swagger_ui_definition_tab(workshop_config, ready_stack, driver):
+    config = workshop_config
+    api_entity_url = (
+        f"{config['rhdh_url']}/catalog/default/api/{config['api_name']}"
+    )
+    definition_tab_url = f"{api_entity_url}/definition"
+
+    sign_in_via_rhdh_popup(driver, config, api_entity_url)
+    dismiss_onboarding(driver)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains(f"/api/{config['api_name']}")
+    )
+    if not open_entity_tab(driver, "definition", "Definition"):
+        driver.get(definition_tab_url)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("/definition")
+    )
+    page_text = _wait_for_text(
+        driver,
+        config["timeout"],
+        "People REST API",
+        "/api/people",
+    )
+    lowered = page_text.lower()
+    assert "missing annotation" not in lowered
+    assert "failed to load" not in lowered
+    assert "/api/people" in lowered
+    assert (
+        "authorize" in lowered
+        or "try it out" in lowered
+        or "oas" in lowered
+        or "schemas" in lowered
+    )
+
+
+@pytest.mark.e2e
 def test_developer_hub_api_github_actions_ci_tab(workshop_config, ready_stack, driver):
     config = workshop_config
     api_entity_url = (
@@ -176,4 +214,6 @@ def test_developer_hub_tech_radar(workshop_config, ready_stack, driver):
         "Quarkus",
         "ADOPT",
     )
-    assert "postgresql" in page_text.lower() or "openshift" in page_text.lower()
+    lowered = page_text.lower()
+    assert "postgresql" in lowered or "openshift" in lowered
+    assert "java 21" in lowered or "kotlin" in lowered or "langchain4j" in lowered

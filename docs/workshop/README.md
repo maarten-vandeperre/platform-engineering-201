@@ -1,18 +1,26 @@
 # Developer Hub on OpenShift — Workshop Guide
 
-This workshop installs **Red Hat Developer Hub** on OpenShift, deploys a sample **Quarkus + PostgreSQL + React** application with GitOps, and connects catalog entities, OpenAPI, Technology Radar, Argo CD, GitHub Actions, and a software template.
+This workshop installs **Red Hat Developer Hub** on OpenShift, deploys a sample **Quarkus + PostgreSQL + React** application with GitOps, and connects catalog entities, OpenAPI, Technology Radar, Argo CD, GitHub Actions, Orchestrator, Egyptian theme, and an organization entity model.
+
+## Primary tutorial
+
+**[TUTORIAL.md](TUTORIAL.md)** — complete outline from a clean sandbox to the current state: commands, what/why, pros/cons per step, verification, and links to every configuration file you can customize.
 
 ## Repository layout
 
 | Path | Purpose |
 |------|---------|
 | `apps/people-service/` | Sample CRUD application (Java Quarkus backend, React frontend) |
+| `apps/people-service-scaffold/` | Scaffolder skeleton (templated `catalog-info.yaml`; synced from `people-service`) |
 | `manifests/gitops/` | GitOps manifests for operators, Argo CD, the app, Developer Hub, and catalog |
 | `scripts/` | Bootstrap and helper scripts (configurable via `workshop.env`) |
 | `e2e/` | Selenium end-to-end tests against the live cluster |
 | `docs/workshop/` | Step-by-step workshop documentation |
+| `docs/workshop/TUTORIAL.md` | **Master tutorial** (clean sandbox → full state) |
 
 ## Day 0 → Done (recommended path)
+
+Follow the **[complete tutorial](TUTORIAL.md)** for the full narrative, or use this quick path:
 
 ### 1. Prerequisites
 
@@ -96,6 +104,7 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 
 | Step | Module | What it does |
 |------|--------|--------------|
+| — | **[TUTORIAL.md](TUTORIAL.md)** | **Full outline with config links (recommended)** |
 | 1 | [01-prerequisites](01-prerequisites.md) | Tools, namespace, fork |
 | 2 | [02-configuration](02-configuration.md) | `workshop.env` variables |
 | 3a | [03-install-operators](03-install-operators.md) | GitOps + RHDH operators |
@@ -113,8 +122,12 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 - **Catalog → APIs**: `People REST API` (OpenAPI from live Quarkus `/q/openapi`)
 - **Tech Radar**: Quarkus, React, PostgreSQL, OpenShift, Keycloak, Argo CD, Developer Hub
 - **CD tab**: Argo CD sync status (when token configured)
-- **CI / Issues / Pull Requests tabs**: GitHub integration (requires `GITHUB_TOKEN` + GitHub OAuth App for CI authorize — see [01-prerequisites](01-prerequisites.md) or `./scripts/create-github-oauth-app.sh --oauth-app`)
+- **CI / Issues / Pull Requests tabs**: GitHub OAuth App — `./scripts/setup-github-auth.sh --oauth-only` or `./scripts/create-github-oauth-app.sh --oauth-app`
+- **Create → Template (Publish to GitHub)**: GitHub PAT — `./scripts/setup-github-auth.sh` (see [01-prerequisites](01-prerequisites.md))
 - **Kubernetes / Topology**: People Service workloads in your namespace
+- **Orchestrator**: `create-person` workflow at `/orchestrator`
+- **Organization model**: 3 teams, 8 users, 2 platforms, 4 apps — [entity diagram](../../manifests/gitops/catalog/diagrams/organization-entity-diagram.md)
+- **Egyptian theme**: gold/lapis branding — see [TUTORIAL Module 9](TUTORIAL.md#module-9--developer-hub-configuration)
 - **Create → Template**: Quarkus + React + PostgreSQL scaffolder
 
 ## OpenAPI endpoints
@@ -132,6 +145,9 @@ Workloads may be scaled to zero between sessions:
 ./scripts/repair-keycloak.sh
 ./scripts/repair-people-app.sh
 ./scripts/repair-developer-hub.sh
+./scripts/setup-developer-hub-dynamic-plugins-cache.sh   # one-time; speeds up restarts
+# If install-dynamic-plugins hangs on "Waiting for lock release":
+# ./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock
 ./scripts/configure-developer-hub-catalog.sh
 ./scripts/setup-developer-hub-config.sh
 ./scripts/create-github-oauth-app.sh --oauth-app   # CI tab Authorize GitHub

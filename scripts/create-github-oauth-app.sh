@@ -355,4 +355,6 @@ if [[ "${APPLY_CONFIG}" == "true" ]]; then
 fi
 
 echo ""
-echo "Next: open the People Service CI tab in Developer Hub and click Authorize GitHub."
+echo "Next steps:"
+echo "  1. Configure scaffolder publish (GitHub PAT): ./scripts/setup-github-auth.sh --pat-only --open-pat-url"
+echo "  2. Open the People Service CI tab in Developer Hub and click Authorize GitHub."

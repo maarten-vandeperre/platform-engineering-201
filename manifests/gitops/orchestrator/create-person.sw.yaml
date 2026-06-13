@@ -2,7 +2,7 @@ id: create-person
 version: "1.0"
 specVersion: "0.8"
 name: Create Person in People API
-description: Authenticates with Keycloak and creates a person via the People REST API
+description: Creates a person in the People REST API using first name, last name, and age
 annotations:
   - workflow-type/infrastructure
 dataInputSchema: schemas/create-person.input-schema.json
@@ -26,8 +26,8 @@ states:
           refName: getKeycloakToken
           arguments:
             client_id: ${KEYCLOAK_CLIENT_ID}
-            username: "${ .username }"
-            password: "${ .password }"
+            username: "${KEYCLOAK_SERVICE_USER}"
+            password: "${KEYCLOAK_SERVICE_PASSWORD}"
             grant_type: password
         actionDataFilter:
           useResults: true

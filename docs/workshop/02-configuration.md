@@ -1,5 +1,7 @@
 # 2. Configure the workshop
 
+> **Full path:** This module is [Module 1](TUTORIAL.md#module-1--local-tools-and-repository-fork) in the [complete tutorial](TUTORIAL.md).
+
 All scripts read configuration from `scripts/workshop.env`. Start from the example file:
 
 ```bash
@@ -14,7 +16,7 @@ cp scripts/workshop.env.example scripts/workshop.env
 | `CLUSTER_ROUTER_BASE` | Cluster apps domain suffix for routes | **Must set for your cluster** |
 | `WORKSHOP_GIT_REPO` | Git URL used by Argo CD and catalog | This repository |
 | `WORKSHOP_GITHUB_ORG` | GitHub user/org for annotations | `maarten-vandeperre` |
-| `GITHUB_TOKEN` | PAT for server-side GitHub API (scaffolder, proxy) | `changeme` |
+| `GITHUB_TOKEN` | PAT for scaffolder publish and GitHub API proxy | `changeme` — configure with `./scripts/setup-github-auth.sh` |
 | `AUTH_GITHUB_CLIENT_ID` | OAuth App client ID for CI tab | set via `./scripts/create-github-oauth-app.sh` |
 | `AUTH_GITHUB_CLIENT_SECRET` | OAuth App client secret for CI tab | set via `./scripts/create-github-oauth-app.sh` |
 | `WORKSHOP_BACKEND_IMAGE` | Backend container image | OpenShift ImageStream |
@@ -23,6 +25,7 @@ cp scripts/workshop.env.example scripts/workshop.env
 | `SKIP_ARGOCD` | Skip Argo CD install and CD tab setup | `false` |
 | `RUN_E2E` | Run Selenium tests after bootstrap | `false` |
 | `RHDH_INSTANCE_NAME` | Developer Hub Backstage CR name | `developer-hub` |
+| `RHDH_APP_TITLE` | Browser title and header (Egyptian theme) | `Nile Developer Hub` |
 | `ARGOCD_INSTANCE_NAME` | Argo CD instance name | `workshop-gitops` |
 | `ARGOCD_APP_NAME` | Argo CD Application name | `people-service` |
 | `KEYCLOAK_ADMIN_USER` | Keycloak admin console user | `admin` |
@@ -50,6 +53,23 @@ Scripts call `envsubst` via `scripts/lib/common.sh` before `oc apply`. This keep
 **Workshop default**: build images on-cluster with OpenShift BuildConfigs (`scripts/build-images-openshift.sh`).
 
 **Production-style**: use GitHub Actions to push to GHCR, then point `WORKSHOP_*_IMAGE` at GHCR tags.
+
+## GitHub auth (OAuth + PAT)
+
+Developer Hub uses two separate GitHub credentials:
+
+| Credential | Purpose | Setup |
+|------------|---------|--------|
+| OAuth App (`AUTH_GITHUB_*`) | CI / Issues / Pull Requests tabs | `./scripts/create-github-oauth-app.sh --oauth-app` |
+| PAT (`GITHUB_TOKEN`) | Scaffolder **Publish to GitHub**, GitHub API proxy | `./scripts/setup-github-auth.sh --open-pat-url` |
+
+Configure both in one pass:
+
+```bash
+./scripts/setup-github-auth.sh --open-pat-url
+```
+
+See [01-prerequisites](01-prerequisites.md) for PAT scopes (`repo`, `workflow`).
 
 ## Next step
 
