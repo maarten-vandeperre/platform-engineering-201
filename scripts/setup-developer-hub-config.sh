@@ -181,4 +181,6 @@ if [[ "${AUTH_GITHUB_CLIENT_ID:-changeme}" == "changeme" ]] \
   echo "Callback URL: https://${RHDH_HOST}/api/auth/github/handler/frame"
 fi
 
+"${SCRIPTS_DIR}/setup-developer-hub-techdocs.sh" || echo "Warning: TechDocs volume setup skipped."
+
 echo "Developer Hub configuration complete."

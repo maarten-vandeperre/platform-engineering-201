@@ -28,6 +28,7 @@ metadata:
   annotations:
     backstage.io/view-url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
     backstage.io/edit-url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/edit/${WORKSHOP_GIT_BRANCH}/manifests/gitops/catalog/entities/people-service.yaml
+    backstage.io/source-location: url:https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/
     github.com/project-slug: ${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
     argocd/app-name: people-service
     backstage.io/kubernetes-id: people-service

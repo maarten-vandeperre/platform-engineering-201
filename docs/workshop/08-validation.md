@@ -38,7 +38,11 @@ Tests cover:
 5. Developer Hub Kubernetes and Topology tabs
 6. Developer Hub API catalog listing (`People REST API`)
 7. Developer Hub **CI** tab on the People REST API entity (GitHub Actions plugin)
-8. Developer Hub Tech Radar page
+8. Developer Hub **Issues** and **Pull Requests** tabs on the People Service entity (GitHub plugins)
+9. Developer Hub Tech Radar page
+10. Developer Hub **Documentation** tabs (Quarkus guide + ADR site)
+11. Developer Hub **Learning Paths** (developers.redhat.com tutorials)
+12. Developer Hub **Orchestrator** (`create-person` workflow)
 
 Run with visible browser:
 
@@ -91,6 +95,10 @@ See [04-deploy-people-app](04-deploy-people-app.md) or run `./scripts/validate-w
 | GitHub Actions CI tab / Authorize GitHub (first time) | `./scripts/create-github-oauth-app.sh --oauth-app` |
 | Re-apply existing GitHub OAuth App to Developer Hub | `./scripts/setup-github-oauth.sh` |
 | Developer Hub login 500 / `ECONNREFUSED :5432` | `./scripts/repair-developer-hub.sh` (RHDH PostgreSQL scaled to 0) |
+| TechDocs tab empty / build failed | `./scripts/setup-developer-hub-techdocs.sh` then `./scripts/setup-developer-hub-config.sh` |
+| Learning Paths empty | Re-run `./scripts/configure-developer-hub-catalog.sh` |
+| Orchestrator `ENOTFOUND sonataflow-platform-data-index-service` | `./scripts/setup-orchestrator.sh` (deploys standalone Data Index) |
+| Orchestrator empty / workflow missing | `./scripts/install-orchestrator-infra.sh` then `./scripts/setup-orchestrator.sh` |
 | Full stack after idle namespace | `./scripts/ensure-workshop-platform.sh` then `./scripts/repair-people-app.sh` and `./e2e/run-e2e.sh` |
 
 Reset PostgreSQL data (destructive):

@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "firstName": {
+      "type": "string",
+      "title": "First name"
+    },
+    "lastName": {
+      "type": "string",
+      "title": "Last name"
+    },
+    "age": {
+      "type": "integer",
+      "title": "Age",
+      "minimum": 0
+    },
+    "username": {
+      "type": "string",
+      "title": "Keycloak username",
+      "default": "user"
+    },
+    "password": {
+      "type": "string",
+      "title": "Keycloak password",
+      "default": "r3dh@t"
+    }
+  },
+  "required": ["firstName", "lastName", "age"]
+}

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: create-person-workflow-props
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+data:
+  application.properties: |
+    kogito.sw.functions.getKeycloakToken.host=${KEYCLOAK_HOST}
+    kogito.sw.functions.createPerson.host=people-backend-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}
+    kogito.sw.functions.createPerson.port=443
+    kogito.sw.functions.createPerson.protocol=https

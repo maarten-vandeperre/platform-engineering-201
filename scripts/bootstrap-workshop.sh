@@ -79,6 +79,8 @@ echo "== Developer Hub configuration =="
 "${SCRIPT_DIR}/setup-developer-hub-kubernetes.sh"
 "${SCRIPT_DIR}/setup-developer-hub-config.sh"
 "${SCRIPT_DIR}/configure-developer-hub-catalog.sh"
+"${SCRIPT_DIR}/setup-developer-hub-techdocs.sh"
+"${SCRIPT_DIR}/setup-orchestrator.sh" || echo "Warning: Orchestrator setup skipped or failed."
 
 echo ""
 echo "== Platform readiness =="

@@ -1,0 +1,12 @@
+site_name: Quarkus Workshop Guide
+site_description: Working with Quarkus in the Platform Engineering 201 workshop
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Dev mode: dev-mode.md
+  - REST APIs: rest-api.md
+  - Persistence: persistence.md
+  - OpenShift deployment: openshift.md
+  - Developer Hub integration: developer-hub.md
+plugins:
+  - techdocs-core

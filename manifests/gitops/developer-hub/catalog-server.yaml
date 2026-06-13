@@ -25,6 +25,12 @@ spec:
             - name: catalog
               mountPath: /catalog
               readOnly: true
+            - name: techdocs-quarkus
+              mountPath: /catalog/techdocs/quarkus-guide
+              readOnly: true
+            - name: techdocs-adrs
+              mountPath: /catalog/techdocs/adrs
+              readOnly: true
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -35,6 +41,12 @@ spec:
         - name: catalog
           configMap:
             name: workshop-catalog-entities
+        - name: techdocs-quarkus
+          configMap:
+            name: workshop-techdocs-quarkus-guide
+        - name: techdocs-adrs
+          configMap:
+            name: workshop-techdocs-adrs
 ---
 apiVersion: v1
 kind: Service

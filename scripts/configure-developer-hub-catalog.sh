@@ -14,6 +14,7 @@ if [[ -z "${KEYCLOAK_URL:-}" ]] && oc get route keycloak -n "${WORKSHOP_NAMESPAC
   KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")
   export KEYCLOAK_URL="https://${KEYCLOAK_HOST}"
 fi
+resolve_keycloak_urls
 
 extract_entities_yaml() {
   render_manifest "${MANIFESTS_DIR}/developer-hub/catalog-configmap.yaml" | awk '
@@ -21,6 +22,25 @@ extract_entities_yaml() {
     in_entities && /^  [^ ]/ { exit }
     in_entities { sub(/^    /, ""); print }
   '
+}
+
+build_techdocs_configmap() {
+  local techdocs_dir="${MANIFESTS_DIR}/techdocs"
+  local site
+
+  for site in quarkus-guide adrs; do
+    if [[ ! -d "${techdocs_dir}/${site}" ]]; then
+      continue
+    fi
+    oc create configmap "workshop-techdocs-${site}" \
+      -n "${WORKSHOP_NAMESPACE}" \
+      --from-file="${techdocs_dir}/${site}" \
+      --dry-run=client -o yaml \
+      | oc apply -f -
+    oc label configmap "workshop-techdocs-${site}" \
+      -n "${WORKSHOP_NAMESPACE}" \
+      app.kubernetes.io/part-of=developer-hub --overwrite
+  done
 }
 
 OPENAPI_RENDERED="$(mktemp)"
@@ -32,6 +52,7 @@ oc create configmap workshop-catalog-entities \
   --from-literal=entities.yaml="$(extract_entities_yaml)" \
   --from-file=people-api.yaml="${OPENAPI_RENDERED}" \
   --from-file=tech-radar.json="${MANIFESTS_DIR}/catalog/tech-radar.json" \
+  --from-file=learning-paths.json="${MANIFESTS_DIR}/developer-hub/learning-paths.json" \
   --dry-run=client -o yaml \
   | oc apply -f -
 
@@ -40,6 +61,9 @@ rm -f "${OPENAPI_RENDERED}"
 oc label configmap workshop-catalog-entities \
   -n "${WORKSHOP_NAMESPACE}" \
   app.kubernetes.io/part-of=developer-hub --overwrite
+
+echo "Publishing TechDocs sources..."
+build_techdocs_configmap
 
 echo "Deploying workshop catalog server..."
 render_manifest "${MANIFESTS_DIR}/developer-hub/catalog-server.yaml" | oc apply -f -
@@ -62,6 +86,9 @@ CATALOG_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "workshop-catalog-server" 
 if [[ -n "${CATALOG_HOST}" ]]; then
   echo "Catalog server: https://${CATALOG_HOST}/entities.yaml"
   echo "Tech Radar data: https://${CATALOG_HOST}/tech-radar.json"
+  echo "Learning paths: https://${CATALOG_HOST}/learning-paths.json"
+  echo "TechDocs (Quarkus): https://${CATALOG_HOST}/techdocs/quarkus-guide/mkdocs.yml"
+  echo "TechDocs (ADRs): https://${CATALOG_HOST}/techdocs/adrs/mkdocs.yml"
   echo "OpenAPI file: https://${CATALOG_HOST}/people-api.yaml"
 fi
 
@@ -78,6 +105,9 @@ RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/nul
 if [[ -n "${RHDH_HOST}" ]]; then
   echo "Developer Hub catalog APIs: https://${RHDH_HOST}/catalog?filters%5Bkind%5D=api"
   echo "Developer Hub Tech Radar: https://${RHDH_HOST}/tech-radar"
+  echo "Developer Hub Learning Paths: https://${RHDH_HOST}/learning-paths"
+  echo "Quarkus TechDocs: https://${RHDH_HOST}/catalog/default/component/quarkus-workshop-guide/docs"
+  echo "ADR TechDocs: https://${RHDH_HOST}/catalog/default/component/platform-architecture-records/docs"
   echo "People REST API entity: https://${RHDH_HOST}/catalog/default/api/people-rest-api"
   echo "People REST API CI tab: https://${RHDH_HOST}/catalog/default/api/people-rest-api/ci"
 fi

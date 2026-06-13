@@ -93,10 +93,29 @@ data:
           target: https://api.github.com
           headers:
             Authorization: Bearer ${GITHUB_TOKEN}
+        '/developer-hub/learning-paths':
+          target: https://workshop-catalog-server-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}
+          pathRewrite:
+            '^/api/proxy/developer-hub/learning-paths': '/learning-paths.json'
+          changeOrigin: true
+          secure: true
+
+    techdocs:
+      builder: 'local'
+      generator:
+        runIn: 'local'
+      publisher:
+        type: 'local'
+
+    orchestrator:
+      dataIndexService:
+        url: http://sonataflow-platform-data-index-service:8080
 
     integrations:
       github:
         - host: github.com
+          apiBaseUrl: https://api.github.com
+          rawBaseUrl: https://raw.githubusercontent.com
           token: ${GITHUB_TOKEN}
 
     techRadar:

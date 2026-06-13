@@ -113,7 +113,7 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 - **Catalog → APIs**: `People REST API` (OpenAPI from live Quarkus `/q/openapi`)
 - **Tech Radar**: Quarkus, React, PostgreSQL, OpenShift, Keycloak, Argo CD, Developer Hub
 - **CD tab**: Argo CD sync status (when token configured)
-- **CI tab**: GitHub Actions (requires `GITHUB_TOKEN` + GitHub OAuth App — see [01-prerequisites](01-prerequisites.md) or `./scripts/create-github-oauth-app.sh --oauth-app`)
+- **CI / Issues / Pull Requests tabs**: GitHub integration (requires `GITHUB_TOKEN` + GitHub OAuth App for CI authorize — see [01-prerequisites](01-prerequisites.md) or `./scripts/create-github-oauth-app.sh --oauth-app`)
 - **Kubernetes / Topology**: People Service workloads in your namespace
 - **Create → Template**: Quarkus + React + PostgreSQL scaffolder
 

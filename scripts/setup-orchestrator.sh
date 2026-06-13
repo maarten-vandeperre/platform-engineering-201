@@ -1,0 +1,142 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/common.sh"
+
+echo "Setting up Orchestrator for Developer Hub in ${WORKSHOP_NAMESPACE}..."
+
+require_oc
+ensure_workshop_platform
+resolve_keycloak_urls
+
+if [[ -z "${KEYCLOAK_HOST:-}" ]]; then
+  KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak" 2>/dev/null || true)
+  export KEYCLOAK_HOST
+fi
+
+echo "Applying workflow configuration..."
+render_manifest "${MANIFESTS_DIR}/orchestrator/create-person-props-configmap.yaml" | oc apply -f -
+
+SCHEMAS_CM="$(mktemp)"
+cat >"${SCHEMAS_CM}" <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: create-person-workflow-schemas
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+data:
+  create-person.input-schema.json: |
+$(sed 's/^/    /' "${MANIFESTS_DIR}/orchestrator/schemas/create-person.input-schema.json")
+  create-person.output-schema.json: |
+$(sed 's/^/    /' "${MANIFESTS_DIR}/orchestrator/schemas/create-person.output-schema.json")
+EOF
+oc apply -f "${SCHEMAS_CM}"
+rm -f "${SCHEMAS_CM}"
+
+has_sonataflow_crd() {
+  oc api-resources 2>/dev/null | awk '{print $1}' | grep -qx 'sonataflows'
+}
+
+wait_for_data_index() {
+  echo "Waiting for sonataflow-platform-data-index-service..."
+  for i in $(seq 1 60); do
+    if oc get svc sonataflow-platform-data-index-service -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1 \
+      && oc get deployment sonataflow-platform-data-index -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+      ready=$(oc get deployment sonataflow-platform-data-index -n "${WORKSHOP_NAMESPACE}" \
+        -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)
+      if [[ "${ready:-0}" == "1" ]]; then
+        echo "Data Index service is ready."
+        return 0
+      fi
+    fi
+    if oc get sonataflowplatform sonataflow-platform -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+      endpoint=$(oc get sonataflowplatform sonataflow-platform -n "${WORKSHOP_NAMESPACE}" \
+        -o jsonpath='{.status.services.dataIndex.endpoint}' 2>/dev/null || true)
+      if [[ -n "${endpoint}" ]]; then
+        echo "SonataFlowPlatform Data Index is ready at ${endpoint}."
+        return 0
+      fi
+    fi
+    if (( i == 60 )); then
+      echo "Warning: timed out waiting for Data Index service." >&2
+      echo "Check: oc get deploy,svc,pods -n ${WORKSHOP_NAMESPACE} | grep -i sonata" >&2
+      return 1
+    fi
+    sleep 10
+  done
+}
+
+deploy_standalone_data_index() {
+  export ORCHESTRATOR_DATA_INDEX_IMAGE="${ORCHESTRATOR_DATA_INDEX_IMAGE:-quay.io/kiegroup/kogito-data-index-postgresql:latest}"
+  echo "Deploying standalone Data Index service (Serverless Logic operator not detected)..."
+  echo "Using image: ${ORCHESTRATOR_DATA_INDEX_IMAGE}"
+  render_manifest "${MANIFESTS_DIR}/orchestrator/data-index.yaml" | oc apply -f -
+  oc wait --for=condition=complete job/sonataflow-create-db -n "${WORKSHOP_NAMESPACE}" --timeout=300s \
+    || echo "Warning: sonataflow database job did not complete in time." >&2
+  wait_for_data_index || true
+}
+
+enable_orchestrator_via_helm() {
+  if ! command -v helm >/dev/null 2>&1; then
+    return 1
+  fi
+  if ! helm status redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    return 1
+  fi
+
+  echo "Enabling Orchestrator SonataFlowPlatform via Helm..."
+  helm upgrade redhat-developer-hub "${RHDH_HELM_CHART:-https://github.com/openshift-helm-charts/charts/releases/download/redhat-redhat-developer-hub-1.9.3/redhat-developer-hub-1.9.3.tgz}" \
+    -n "${RHDH_NAMESPACE}" \
+    --reuse-values \
+    --set orchestrator.enabled=true \
+    --set orchestrator.serverlessOperator.enabled=false \
+    --set orchestrator.serverlessLogicOperator.enabled=true \
+    --wait --timeout 15m
+}
+
+if has_sonataflow_crd; then
+  enable_orchestrator_via_helm || deploy_standalone_data_index
+
+  echo "Deploying create-person workflow (SonataFlow)..."
+  render_manifest "${MANIFESTS_DIR}/orchestrator/create-person-sonataflow.yaml" | oc apply -f -
+  echo "Waiting for create-person workflow pod..."
+  for i in $(seq 1 60); do
+    if oc get pods -n "${WORKSHOP_NAMESPACE}" -l sonataflow.org/workflow=create-person \
+      -o jsonpath='{.items[0].status.containerStatuses[0].ready}' 2>/dev/null | grep -q true; then
+      echo "create-person workflow pod is ready."
+      break
+    fi
+    if (( i == 60 )); then
+      echo "Warning: timed out waiting for create-person workflow pod." >&2
+      echo "Check: oc get sonataflow,pods -n ${WORKSHOP_NAMESPACE}" >&2
+    fi
+    sleep 10
+  done
+else
+  cat <<'ORCH_WARN_EOF' >&2
+OpenShift Serverless Logic is not installed on this cluster.
+
+Deploying a standalone Data Index service so the Orchestrator UI can load.
+Workflow execution requires the Serverless Logic operator. A cluster
+administrator can install it once with:
+
+  ./scripts/install-orchestrator-infra.sh
+
+Then re-run:
+  ./scripts/setup-orchestrator.sh
+ORCH_WARN_EOF
+  deploy_standalone_data_index
+fi
+
+echo "Enabling Orchestrator plugins in Developer Hub..."
+"${SCRIPTS_DIR}/setup-developer-hub-config.sh"
+
+RHDH_HOST="$(resolve_rhdh_host)"
+echo ""
+echo "Orchestrator setup complete."
+echo "Developer Hub Orchestrator: https://${RHDH_HOST}/orchestrator"
+echo "People Service Workflows tab: https://${RHDH_HOST}/catalog/default/component/people-service/workflows"

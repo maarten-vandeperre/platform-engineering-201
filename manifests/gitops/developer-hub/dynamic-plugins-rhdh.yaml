@@ -33,3 +33,51 @@ data:
                       if:
                         allOf:
                           - isGithubActionsAvailable
+      - package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/backstage-community-plugin-github-issues:bs_1.45.3__0.16.0
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              backstage-community.plugin-github-issues:
+                mountPoints:
+                  - mountPoint: entity.page.issues/cards
+                    importName: GithubIssuesCard
+                    config:
+                      layout:
+                        gridColumn: "1 / -1"
+                      if:
+                        allOf:
+                          - hasAnnotation: github.com/project-slug
+      - package: oci://ghcr.io/redhat-developer/rhdh-plugin-export-overlays/roadiehq-backstage-plugin-github-pull-requests:bs_1.45.3__3.6.2
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              roadiehq.backstage-plugin-github-pull-requests:
+                mountPoints:
+                  - mountPoint: entity.page.pull-requests/cards
+                    importName: EntityGithubPullRequestsContent
+                    config:
+                      layout:
+                        gridColumn: "1 / -1"
+                      if:
+                        allOf:
+                          - isGithubPullRequestsAvailable
+      - package: ./dynamic-plugins/dist/backstage-plugin-notifications
+        disabled: false
+      - package: ./dynamic-plugins/dist/backstage-plugin-signals
+        disabled: false
+      - package: ./dynamic-plugins/dist/backstage-plugin-notifications-backend-dynamic
+        disabled: false
+      - package: ./dynamic-plugins/dist/backstage-plugin-signals-backend-dynamic
+        disabled: false
+      - package: 'oci://registry.access.redhat.com/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator:{{inherit}}'
+        disabled: false
+      - package: 'oci://registry.access.redhat.com/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-backend:{{inherit}}'
+        disabled: false
+        dependencies:
+          - ref: sonataflow
+      - package: 'oci://registry.access.redhat.com/rhdh/red-hat-developer-hub-backstage-plugin-scaffolder-backend-module-orchestrator:{{inherit}}'
+        disabled: false
+      - package: 'oci://registry.access.redhat.com/rhdh/red-hat-developer-hub-backstage-plugin-orchestrator-form-widgets:{{inherit}}'
+        disabled: false

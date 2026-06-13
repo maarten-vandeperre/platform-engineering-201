@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redhat-developer-hub
+  namespace: ${RHDH_NAMESPACE}
+spec:
+  template:
+    metadata:
+      annotations:
+        workshop.platform-engineering/techdocs: enabled
+    spec:
+      initContainers:
+        - name: prepare-techdocs
+          image: python:3.12-alpine
+          resources:
+            requests:
+              cpu: 0m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              mkdir -p /workspace/quarkus-guide/docs /workspace/adrs/docs
+              for site in quarkus-guide adrs; do
+                src="/sources-${site}"
+                dst="/workspace/${site}"
+                cp "${src}/catalog-info.yaml" "${dst}/"
+                cp "${src}/mkdocs.yml" "${dst}/"
+                for f in "${src}"/docs-*.md; do
+                  [ -f "$f" ] || continue
+                  cp "$f" "${dst}/docs/$(basename "${f#${src}/docs-}")"
+                done
+              done
+          volumeMounts:
+            - name: techdocs-workspace
+              mountPath: /workspace
+            - name: techdocs-quarkus-source
+              mountPath: /sources-quarkus-guide
+            - name: techdocs-adrs-source
+              mountPath: /sources-adrs
+      volumes:
+        - name: techdocs-workspace
+          emptyDir: {}
+        - name: techdocs-quarkus-source
+          configMap:
+            name: rhdh-techdocs-quarkus-guide
+        - name: techdocs-adrs-source
+          configMap:
+            name: rhdh-techdocs-adrs
+      containers:
+        - name: backstage-backend
+          volumeMounts:
+            - name: techdocs-workspace
+              mountPath: /catalog/techdocs
+              readOnly: true

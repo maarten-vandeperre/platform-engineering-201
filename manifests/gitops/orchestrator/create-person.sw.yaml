@@ -1,0 +1,44 @@
+id: create-person
+version: "1.0"
+specVersion: "0.8"
+name: Create Person in People API
+description: Authenticates with Keycloak and creates a person via the People REST API
+annotations:
+  - workflow-type/infrastructure
+dataInputSchema: schemas/create-person.input-schema.json
+extensions:
+  - extensionid: workflow-output-schema
+    outputSchema: schemas/create-person.output-schema.json
+start: CreatePerson
+functions:
+  - name: getKeycloakToken
+    type: custom
+    operation: rest:post:/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token
+  - name: createPerson
+    type: custom
+    operation: rest:post:/api/people
+states:
+  - name: CreatePerson
+    type: operation
+    actions:
+      - name: Authenticate
+        functionRef:
+          refName: getKeycloakToken
+          arguments:
+            client_id: ${KEYCLOAK_CLIENT_ID}
+            username: "${ .username }"
+            password: "${ .password }"
+            grant_type: password
+        actionDataFilter:
+          useResults: true
+          results: "${ .access_token }"
+          toStateData: "${ .accessToken }"
+      - name: CreateRecord
+        functionRef:
+          refName: createPerson
+          arguments:
+            firstName: "${ .firstName }"
+            lastName: "${ .lastName }"
+            age: "${ .age }"
+            Authorization: "${ \"Bearer \" + .accessToken }"
+    end: true

@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: platform-architecture-records
+  title: Platform Architecture Decision Records
+  description: Sample ADRs documenting workshop platform choices.
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - adr
+    - architecture
+    - techdocs
+spec:
+  type: documentation
+  lifecycle: production
+  owner: guests
+  system: people-platform

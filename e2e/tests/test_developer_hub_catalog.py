@@ -86,6 +86,80 @@ def test_developer_hub_api_github_actions_ci_tab(workshop_config, ready_stack, d
 
 
 @pytest.mark.e2e
+def test_developer_hub_api_github_issues_tab(workshop_config, ready_stack, driver):
+    config = workshop_config
+    component_url = f"{config['rhdh_url']}/catalog/default/component/people-service"
+    issues_tab_url = f"{component_url}/issues"
+
+    sign_in_via_rhdh_popup(driver, config, component_url)
+    dismiss_onboarding(driver)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("/component/people-service")
+    )
+    overview_text = _wait_for_text(driver, config["timeout"], "People Service")
+    assert "missing annotation" not in overview_text.lower()
+
+    if not open_entity_tab(driver, "issues", "Issues"):
+        driver.get(issues_tab_url)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("/issues")
+    )
+    issues_text = _wait_for_text(driver, config["timeout"], "People Service")
+    lowered = issues_text.lower()
+    assert "missing annotation" not in lowered
+    assert "error in github-issues" not in lowered
+    assert "invalid url" not in lowered
+    assert "failed to construct" not in lowered
+    assert (
+        "hurray! no issues" in lowered
+        or "#" in issues_text
+        or "updated" in lowered
+        or "created" in lowered
+        or "open issues" in lowered
+    )
+
+
+@pytest.mark.e2e
+def test_developer_hub_api_github_pull_requests_tab(
+    workshop_config, ready_stack, driver
+):
+    config = workshop_config
+    component_url = f"{config['rhdh_url']}/catalog/default/component/people-service"
+    pull_requests_tab_url = f"{component_url}/pull-requests"
+
+    sign_in_via_rhdh_popup(driver, config, component_url)
+    dismiss_onboarding(driver)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("/component/people-service")
+    )
+    overview_text = _wait_for_text(driver, config["timeout"], "People Service")
+    assert "missing annotation" not in overview_text.lower()
+
+    if not open_entity_tab(driver, "pull-requests", "Pull Requests"):
+        driver.get(pull_requests_tab_url)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("/pull-requests")
+    )
+    pull_requests_text = _wait_for_text(driver, config["timeout"], "People Service")
+    lowered = pull_requests_text.lower()
+    assert "missing annotation" not in lowered
+    assert "error in github" not in lowered
+    assert "invalid url" not in lowered
+    assert (
+        "pull request" in lowered
+        or "pull requests" in lowered
+        or "github" in lowered
+        or "no pull" in lowered
+        or "merged" in lowered
+        or "open" in lowered
+    )
+
+
+@pytest.mark.e2e
 def test_developer_hub_tech_radar(workshop_config, ready_stack, driver):
     config = workshop_config
     radar_url = f"{config['rhdh_url']}/tech-radar"

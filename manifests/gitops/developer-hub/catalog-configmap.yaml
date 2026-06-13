@@ -35,6 +35,7 @@ data:
       annotations:
         backstage.io/view-url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
         backstage.io/edit-url: https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/edit/${WORKSHOP_GIT_BRANCH}/manifests/gitops/catalog/entities/people-service.yaml
+        backstage.io/source-location: url:https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/
         github.com/project-slug: ${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
         argocd/app-name: ${ARGOCD_APP_NAME}
         backstage.io/kubernetes-id: people-service
@@ -81,6 +82,46 @@ data:
         - people-rest-api
     ---
     apiVersion: backstage.io/v1alpha1
+    kind: Component
+    metadata:
+      name: quarkus-workshop-guide
+      title: Quarkus Workshop Guide
+      description: TechDocs guide for working with Quarkus in the People Service workshop.
+      annotations:
+        backstage.io/techdocs-ref: dir:./techdocs/quarkus-guide
+      tags:
+        - quarkus
+        - documentation
+        - techdocs
+      links:
+        - url: https://quarkus.io/
+          title: Quarkus project
+          icon: docs
+    spec:
+      type: documentation
+      lifecycle: production
+      owner: guests
+      system: people-platform
+    ---
+    apiVersion: backstage.io/v1alpha1
+    kind: Component
+    metadata:
+      name: platform-architecture-records
+      title: Platform Architecture Decision Records
+      description: Sample ADRs documenting workshop platform choices.
+      annotations:
+        backstage.io/techdocs-ref: dir:./techdocs/adrs
+      tags:
+        - adr
+        - architecture
+        - techdocs
+    spec:
+      type: documentation
+      lifecycle: production
+      owner: guests
+      system: people-platform
+    ---
+    apiVersion: backstage.io/v1alpha1
     kind: API
     metadata:
       name: people-rest-api
@@ -88,7 +129,7 @@ data:
       description: OpenAPI specification for the People CRUD backend secured with Keycloak.
       annotations:
         github.com/project-slug: ${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}
-        backstage.io/source-location: url:https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service
+        backstage.io/source-location: url:https://github.com/${WORKSHOP_GITHUB_ORG}/${WORKSHOP_GITHUB_REPO}/tree/${WORKSHOP_GIT_BRANCH}/apps/people-service/
       tags:
         - openapi
         - rest

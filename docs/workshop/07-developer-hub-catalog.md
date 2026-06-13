@@ -41,6 +41,8 @@ catalog:
 | `all.yaml` | Location | Imports entities and templates (Git-hosted catalog) |
 | `entities/people-service.yaml` | System + Component | Registers the demo app |
 | `entities/people-api.yaml` | API | People REST API (OpenAPI from live backend) |
+| `entities/quarkus-workshop-guide.yaml` | Component | Quarkus TechDocs site |
+| `entities/platform-architecture-records.yaml` | Component | ADR TechDocs site |
 | `openapi/people-api.yaml` | — | Static OpenAPI reference served by catalog server |
 | `tech-radar.json` | — | Technology Radar data |
 | `templates/quarkus-react-postgres-template.yaml` | Template | Scaffolder template |
@@ -49,7 +51,8 @@ catalog:
 
 | Annotation | Integration |
 |------------|-------------|
-| `github.com/project-slug` | GitHub Actions plugin — CI/CD tab |
+| `github.com/project-slug` | GitHub Actions (**CI**), Issues, and Pull Requests tabs |
+| `backstage.io/source-location` | GitHub host for Issues plugin (must be a `url:https://github.com/.../` link) |
 | `argocd/app-name` | Argo CD plugin — CD tab |
 | `backstage.io/kubernetes-id` | Kubernetes plugin — resources tab |
 | `backstage.io/kubernetes-namespace` | Limits K8s view to your namespace |
@@ -60,7 +63,8 @@ The **People REST API** (`people-rest-api`) is linked from the `people-service` 
 
 | Annotation | Integration |
 |------------|-------------|
-| `github.com/project-slug` | GitHub Actions plugin — **CI** tab on the API entity page |
+| `github.com/project-slug` | GitHub Actions (**CI**), Issues, and Pull Requests tabs on the API entity page |
+| `backstage.io/source-location` | GitHub host for Issues plugin (must be a `url:https://github.com/.../` link) |
 | `backstage.io/source-location` | Links the API to `apps/people-service` in GitHub |
 
 | Endpoint | Description |
@@ -75,11 +79,23 @@ Component API tab: `/catalog/default/component/people-service/api`.
 
 People REST API CI tab (GitHub Actions workflow runs): `/catalog/default/api/people-rest-api/ci`.
 
+People Service GitHub tabs (require `github.com/project-slug` on the entity):
+
+| Tab | URL |
+|-----|-----|
+| CI | `/catalog/default/component/people-service/ci` |
+| Issues | `/catalog/default/component/people-service/issues` |
+| Pull Requests | `/catalog/default/component/people-service/pull-requests` |
+
+The same tabs are available on the **People REST API** entity (`/catalog/default/api/people-rest-api/...`).
+
 ### Technology Radar
 
 Plugins enabled in `dynamic-plugins-rhdh.yaml`:
 
 - `oci://ghcr.io/.../backstage-community-plugin-github-actions` — CI tab with workflow runs
+- `oci://ghcr.io/.../backstage-community-plugin-github-issues` — Issues tab linked to the repository
+- `oci://ghcr.io/.../roadiehq-backstage-plugin-github-pull-requests` — Pull Requests tab linked to the repository
 - `backstage-community-plugin-tech-radar`
 - `backstage-community-plugin-tech-radar-backend-dynamic`
 
@@ -91,6 +107,84 @@ techRadar:
 ```
 
 Open **Tech Radar** in the sidebar or visit `/tech-radar`.
+
+### TechDocs documentation sites
+
+Two TechDocs sites are published from `manifests/gitops/techdocs/` and mounted into Developer Hub:
+
+| Entity | Pages | Content |
+|--------|-------|---------|
+| `quarkus-workshop-guide` | 7 | Working with Quarkus (dev mode, REST, persistence, OpenShift, Developer Hub) |
+| `platform-architecture-records` | 6 | Sample architecture decision records (ADR-001 … ADR-005) |
+
+Catalog annotations (TechDocs sources are mounted at `/catalog/techdocs/` inside Developer Hub):
+
+```yaml
+metadata:
+  annotations:
+    backstage.io/techdocs-ref: dir:./techdocs/quarkus-guide
+    # ADR site uses dir:./techdocs/adrs
+```
+
+Sources live under `manifests/gitops/techdocs/`. The script `./scripts/setup-developer-hub-techdocs.sh` mounts them at `/catalog/techdocs/` inside Developer Hub.
+
+TechDocs builder settings in `app-config-rhdh.yaml`:
+
+```yaml
+techdocs:
+  builder: 'local'
+  generator:
+    runIn: 'local'
+  publisher:
+    type: 'local'
+```
+
+Open the **Documentation** tab on each entity:
+
+- `/catalog/default/component/quarkus-workshop-guide/docs`
+- `/catalog/default/component/platform-architecture-records/docs`
+
+After editing TechDocs sources:
+
+```bash
+./scripts/configure-developer-hub-catalog.sh
+./scripts/setup-developer-hub-config.sh
+```
+
+### Learning Paths
+
+Workshop learning paths are served from `manifests/gitops/developer-hub/learning-paths.json` and proxied through Developer Hub:
+
+| Label | URL |
+|-------|-----|
+| Developing with Quarkus | https://developers.redhat.com/learn/quarkus |
+| Developing OpenShift applications with Java and Quarkus | https://developers.redhat.com/learn/openshift/developing-openshift-applications-java-and-quarkus |
+
+Open **Learning Paths** in the sidebar or visit `/learning-paths`.
+
+### Orchestrator workflow
+
+The **Create Person in People API** workflow (`create-person`) authenticates with Keycloak and POSTs to `/api/people`.
+
+Enable plugins and deploy Orchestrator infrastructure:
+
+```bash
+./scripts/setup-orchestrator.sh
+```
+
+When OpenShift **Serverless Logic** is not installed, the script deploys a standalone **Data Index** service (`sonataflow-platform-data-index-service`) so the Orchestrator UI loads. For full workflow execution, a cluster admin installs the operators once:
+
+```bash
+./scripts/install-orchestrator-infra.sh
+./scripts/setup-orchestrator.sh
+```
+
+| Location | URL |
+|----------|-----|
+| Orchestrator UI | `/orchestrator` |
+| People Service Workflows tab | `/catalog/default/component/people-service/workflows` |
+
+Workflow definition: `manifests/gitops/orchestrator/create-person-sonataflow.yaml`
 
 ## Software template
 

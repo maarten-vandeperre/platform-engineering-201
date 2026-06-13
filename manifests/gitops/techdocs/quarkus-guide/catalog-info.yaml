@@ -1,0 +1,17 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: quarkus-workshop-guide
+  title: Quarkus Workshop Guide
+  description: TechDocs guide for working with Quarkus in the People Service workshop.
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+  tags:
+    - quarkus
+    - documentation
+    - techdocs
+spec:
+  type: documentation
+  lifecycle: production
+  owner: guests
+  system: people-platform

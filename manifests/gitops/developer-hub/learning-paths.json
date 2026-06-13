@@ -1,0 +1,18 @@
+[
+  {
+    "label": "Developing with Quarkus",
+    "description": "Learn Quarkus on OpenShift: hello endpoints, Hibernate ORM with Panache, and building microservices without redundant boilerplate.",
+    "url": "https://developers.redhat.com/learn/quarkus",
+    "paths": 9,
+    "hours": 2,
+    "minutes": 10
+  },
+  {
+    "label": "Developing OpenShift applications with Java and Quarkus",
+    "description": "Hands-on path for creating, testing, and deploying Java applications to OpenShift using Quarkus live coding and data-driven examples.",
+    "url": "https://developers.redhat.com/learn/openshift/developing-openshift-applications-java-and-quarkus",
+    "paths": 10,
+    "hours": 2,
+    "minutes": 25
+  }
+]

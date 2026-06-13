@@ -1,0 +1,11 @@
+site_name: Platform Architecture Decision Records
+site_description: Architecture decisions for the Platform Engineering 201 workshop
+nav:
+  - Home: index.md
+  - ADR-001 Quarkus + React stack: adr-001-quarkus-react-stack.md
+  - ADR-002 PostgreSQL data store: adr-002-postgresql-data-store.md
+  - ADR-003 Keycloak authentication: adr-003-keycloak-authentication.md
+  - ADR-004 GitOps deployment: adr-004-gitops-deployment.md
+  - ADR-005 Developer Hub catalog: adr-005-developer-hub-catalog.md
+plugins:
+  - techdocs-core
