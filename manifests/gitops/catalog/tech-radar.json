@@ -86,7 +86,7 @@
       "id": "argocd",
       "title": "Argo CD",
       "quadrant": "infrastructure",
-      "description": "GitOps continuous delivery aligned with platform engineering narratives at Voxxed and Devoxx."
+      "description": "GitOps continuous delivery for Kubernetes — declarative sync from Git, used in the workshop for People Service manifests and a staple of platform engineering talks."
     },
     {
       "timeline": [{ "moved": 0, "ringId": "adopt", "date": "2026-01-01T00:00:00.000Z" }],
@@ -231,6 +231,62 @@
       "title": "Eclipse Store",
       "quadrant": "frameworks",
       "description": "Object persistence engine gaining attention in Java performance and architecture sessions as an alternative to ORM-heavy stacks."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "trial", "date": "2026-06-11T00:00:00.000Z" }],
+      "key": "java-25",
+      "id": "java-25",
+      "title": "Java 25",
+      "quadrant": "languages",
+      "description": "Latest Java feature release with preview and incubator capabilities; evaluate on non-production workloads before the next LTS cycle."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "trial", "date": "2026-06-11T00:00:00.000Z" }],
+      "key": "service-mesh",
+      "id": "service-mesh",
+      "title": "Service Mesh",
+      "quadrant": "infrastructure",
+      "description": "Istio, Linkerd, and OpenShift Service Mesh for mTLS, traffic management, and observability between microservices — pilot on new platform services first."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "trial", "date": "2026-06-11T00:00:00.000Z" }],
+      "key": "argo-rollouts",
+      "id": "argo-rollouts",
+      "title": "Argo Rollouts",
+      "quadrant": "infrastructure",
+      "description": "Progressive delivery controller for canary, blue-green, and analysis-driven deployments; pairs naturally with Argo CD GitOps in the workshop stack."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "trial", "date": "2026-06-11T00:00:00.000Z" }],
+      "key": "vllm",
+      "id": "vllm",
+      "title": "vLLM",
+      "quadrant": "infrastructure",
+      "description": "High-throughput LLM inference engine with PagedAttention and OpenAI-compatible APIs — popular for self-hosted model serving on GPU clusters."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "trial", "date": "2026-06-11T00:00:00.000Z" }],
+      "key": "model-as-a-service",
+      "id": "model-as-a-service",
+      "title": "Model-as-a-Service",
+      "quadrant": "infrastructure",
+      "description": "Centralized LLM and embedding endpoints consumed by applications via API gateways — standardize quotas, routing, and observability for AI workloads."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "trial", "date": "2026-06-11T00:00:00.000Z" }],
+      "key": "llm-deployment",
+      "id": "llm-deployment",
+      "title": "LLM Deployment (LLMD)",
+      "quadrant": "process",
+      "description": "Operational patterns for packaging, scaling, and governing large language models in production — from model registry to SLOs and safe rollout."
+    },
+    {
+      "timeline": [{ "moved": 0, "ringId": "assess", "date": "2026-06-11T00:00:00.000Z" }],
+      "key": "digital-sovereignty",
+      "id": "digital-sovereignty",
+      "title": "Digital Sovereignty",
+      "quadrant": "process",
+      "description": "Data residency, EU cloud regions, and vendor-independent stacks so platforms meet sovereignty and compliance requirements without sacrificing developer experience."
     },
     {
       "timeline": [{ "moved": 0, "ringId": "hold", "date": "2026-06-01T00:00:00.000Z" }],

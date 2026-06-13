@@ -270,6 +270,10 @@ If **Publish to GitHub** fails with `401`, re-run `./scripts/setup-github-auth.s
 
 If **Publish to GitHub** fails with `publish:github is not registered`, enable `backstage-plugin-scaffolder-backend-module-github-dynamic` in `dynamic-plugins-rhdh.yaml` and run `./scripts/setup-developer-hub-config.sh`.
 
+If **Register in catalog** fails with `409 Conflict`, that GitHub location is already registered (typical when re-scaffolding into the same repository). Either use a **new repository name**, or remove the old location in Developer Hub (**Administration** → **Locations**, find `…/test-scaffolding/…/catalog-info.yaml` → **Delete**), then run the template again. The template sets `optional: true` on `catalog:register` so re-runs succeed once the catalog config is updated.
+
+If the component does not appear after a successful run, check **Component owner** is `guests` (not a custom name like `guests-owner` — only groups defined in the workshop catalog exist).
+
 If Developer Hub stays in `Init:0/1` with `install-dynamic-plugins` logging `Waiting for lock release`, clear a stale lock on the plugins PVC:
 
 ```bash

@@ -30,8 +30,10 @@ spec:
         owner:
           title: Component owner
           type: string
-          description: Backstage entity owner (use guests for the workshop)
+          description: Backstage entity owner — must be an existing group (use guests for the workshop)
           default: guests
+          enum:
+            - guests
     - title: Application details
       required:
         - componentId
@@ -77,6 +79,7 @@ spec:
       input:
         repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
         catalogInfoPath: /catalog-info.yaml
+        optional: true
   output:
     links:
       - title: Repository
