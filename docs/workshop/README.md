@@ -150,6 +150,7 @@ Workloads may be scaled to zero between sessions:
 # ./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock
 ./scripts/configure-developer-hub-catalog.sh
 ./scripts/setup-developer-hub-config.sh
+./scripts/setup-developer-hub-lightspeed.sh   # optional; LIGHTSPEED_ENABLED + OPENAI_API_KEY
 ./scripts/create-github-oauth-app.sh --oauth-app   # CI tab Authorize GitHub
 ```
 

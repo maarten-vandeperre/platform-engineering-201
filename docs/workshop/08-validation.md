@@ -133,6 +133,8 @@ REPAIR_RESET_POSTGRES_DATA=true ./scripts/repair-people-app.sh
 | API listing empty | Ensure catalog server is running (`oc get deploy workshop-catalog-server`) |
 | API returns 401/403 | Obtain Keycloak token; user must have `people-crud` role |
 | Wrong cluster URLs | Set `CLUSTER_ROUTER_BASE` in `workshop.env` and re-run config scripts |
+| No Lightspeed chat button | `LIGHTSPEED_ENABLED=true`, valid `OPENAI_API_KEY`, `./scripts/setup-developer-hub-lightspeed.sh` |
+| Lightspeed chat errors | Check `oc logs deploy/redhat-developer-hub -c llama-stack`; verify OpenAI key and model |
 
 ## Clean up
 

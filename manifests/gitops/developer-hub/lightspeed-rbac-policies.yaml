@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lightspeed-rbac-policies
+  namespace: ${RHDH_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+data:
+  rbac-policies.csv: |
+    p, role:default/lightspeed-users, lightspeed.chat.read, read, allow
+    p, role:default/lightspeed-users, lightspeed.chat.create, create, allow
+    p, role:default/lightspeed-users, lightspeed.chat.delete, delete, allow
+    p, role:default/lightspeed-users, lightspeed.mcp.read, read, allow
+    p, role:default/lightspeed-users, lightspeed.mcp.manage, update, allow
+    g, user:default/${RHDH_KEYCLOAK_USER}, role:default/lightspeed-users

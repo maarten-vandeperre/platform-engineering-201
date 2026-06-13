@@ -135,6 +135,24 @@ render_app_config() {
 
   strip_placeholder_github_token "${base_file}"
 
+  if is_lightspeed_enabled; then
+    ensure_mcp_token
+    local mcp_file merged_mcp lightspeed_file merged_ls
+    mcp_file="$(mktemp)"
+    merged_mcp="$(mktemp)"
+    envsubst '${MCP_TOKEN}' <"${MANIFESTS_DIR}/developer-hub/app-config-mcp.yaml" >"${mcp_file}"
+    merge_mcp_into_app_config "${base_file}" "${mcp_file}" "${merged_mcp}"
+    cp "${merged_mcp}" "${base_file}"
+    rm -f "${mcp_file}" "${merged_mcp}"
+
+    lightspeed_file="$(mktemp)"
+    merged_ls="$(mktemp)"
+    envsubst '${MCP_TOKEN}' <"${MANIFESTS_DIR}/developer-hub/app-config-lightspeed-snippet.yaml" >"${lightspeed_file}"
+    merge_mcp_into_app_config "${base_file}" "${lightspeed_file}" "${merged_ls}"
+    cp "${merged_ls}" "${base_file}"
+    rm -f "${lightspeed_file}" "${merged_ls}"
+  fi
+
   envsubst '${EGYPTIAN_FULL_LOGO} ${EGYPTIAN_ICON_LOGO}' \
     <"${MANIFESTS_DIR}/developer-hub/egyptian-theme.yaml" \
     | sed 's/^/  /' >"${theme_file}"
@@ -156,9 +174,29 @@ render_app_config() {
   cat "${merged_file}"
 }
 
+is_lightspeed_enabled() {
+  [[ "${LIGHTSPEED_ENABLED:-false}" == "true" \
+    || "${LIGHTSPEED_ENABLED:-false}" == "1" \
+    || "${LIGHTSPEED_ENABLED:-false}" == "yes" ]]
+}
+
 render_dynamic_plugins() {
+  local base_file merged_file
+  base_file="$(mktemp)"
+  merged_file="$(mktemp)"
   envsubst '${RHDH_NAMESPACE}' <"${MANIFESTS_DIR}/developer-hub/dynamic-plugins-rhdh.yaml" \
-    | awk '/dynamic-plugins.yaml: \|/{flag=1;next} flag{sub(/^    /,""); print}'
+    | awk '/dynamic-plugins.yaml: \|/{flag=1;next} flag{sub(/^    /,""); print}' >"${base_file}"
+
+  cp "${base_file}" "${merged_file}"
+  if is_lightspeed_enabled; then
+    printf '\n' >>"${merged_file}"
+    cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-lightspeed.yaml" >>"${merged_file}"
+    printf '\n' >>"${merged_file}"
+    cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-mcp.yaml" >>"${merged_file}"
+  fi
+
+  cat "${merged_file}"
+  rm -f "${base_file}" "${merged_file}"
 }
 
 apply_dynamic_plugins_config() {
@@ -233,6 +271,23 @@ if [[ "${AUTH_GITHUB_CLIENT_ID:-changeme}" == "changeme" ]] \
   echo "Callback URL: https://${RHDH_HOST}/api/auth/github/handler/frame"
 fi
 
+if is_lightspeed_enabled && [[ "${OPENAI_API_KEY:-changeme}" == "changeme" ]]; then
+  echo ""
+  echo "WARNING: LIGHTSPEED_ENABLED=true but OPENAI_API_KEY is 'changeme'."
+  echo "Developer Lightspeed requires a valid OpenAI API key:"
+  echo "  export OPENAI_API_KEY=sk-...   # in scripts/workshop.env"
+  echo "  ./scripts/setup-developer-hub-lightspeed.sh"
+fi
+
 "${SCRIPTS_DIR}/setup-developer-hub-techdocs.sh" || echo "Warning: TechDocs volume setup skipped."
+
+if is_lightspeed_enabled; then
+  "${SCRIPTS_DIR}/setup-developer-hub-lightspeed.sh" --force-rollout || \
+    echo "Warning: Developer Lightspeed setup failed; see docs/workshop/06-install-developer-hub.md"
+elif [[ "${LIGHTSPEED_ENABLED:-false}" != "false" ]]; then
+  echo ""
+  echo "NOTE: Set LIGHTSPEED_ENABLED=true and OPENAI_API_KEY in workshop.env, then re-run:"
+  echo "  ./scripts/setup-developer-hub-lightspeed.sh"
+fi
 
 echo "Developer Hub configuration complete."

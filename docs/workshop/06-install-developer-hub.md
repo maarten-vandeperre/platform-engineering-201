@@ -89,6 +89,143 @@ If the pod is still stuck, delete the Developer Hub pod so it recreates, or run 
 
 See [Red Hat docs: Use the dynamic plugins cache](https://docs.redhat.com/en/documentation/red_hat_developer_hub/1.9/html/configuring_red_hat_developer_hub/use-the-dynamic-plugins-cache_configuring-rhdh).
 
+## Developer Lightspeed
+
+[Developer Lightspeed](https://docs.redhat.com/en/documentation/red_hat_developer_hub/1.9/html/interacting_with_red_hat_developer_lightspeed_for_red_hat_developer_hub/) adds an AI chat assistant (floating action button and `/lightspeed` page) to Developer Hub. The workshop connects it to **OpenAI** using the native OpenAI provider (not vLLM against `api.openai.com`).
+
+### Configure in `workshop.env`
+
+```bash
+export LIGHTSPEED_ENABLED=true
+export OPENAI_API_KEY=sk-your-openai-api-key
+export OPENAI_MODEL=gpt-4o-mini          # optional; default gpt-4o-mini
+export LIGHTSPEED_VLLM_MAX_TOKENS=4096   # optional max tokens hint
+```
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `LIGHTSPEED_ENABLED` | `false` | Enable Lightspeed plugins, sidecars, and secrets |
+| `OPENAI_API_KEY` | `changeme` | OpenAI platform API key ([platform.openai.com](https://platform.openai.com/)) |
+| `OPENAI_MODEL` | `gpt-4o-mini` | Model id passed to the OpenAI provider |
+| `LIGHTSPEED_VLLM_MAX_TOKENS` | `4096` | Token limit hint for inference providers |
+| `LIGHTSPEED_SAFETY_GUARD` | `false` | Set `true` only if you run a Llama Guard safety server (`SAFETY_URL`); default disables moderation for OpenAI-only workshop |
+
+### Install
+
+`setup-developer-hub-config.sh` enables Lightspeed automatically when `LIGHTSPEED_ENABLED=true` and a valid `OPENAI_API_KEY` is set. Or run standalone:
+
+```bash
+./scripts/setup-developer-hub-lightspeed.sh
+```
+
+This script:
+
+1. Creates ConfigMaps `lightspeed-stack`, `lightspeed-app-config`, and `lightspeed-rbac-policies`
+2. Creates Secret `llama-stack-secrets` with `ENABLE_OPENAI=true` and your API key
+3. Adds **Llama Stack** and **Lightspeed Core Service** sidecars to the Developer Hub pod
+4. Initializes RAG content for product documentation (`init-rag-data` init container)
+5. Registers Lightspeed dynamic plugins (frontend + backend) and **MCP** plugins (catalog + TechDocs tools)
+6. Links Lightspeed to the RHDH MCP server (`mcp::backstage`) so chat can query the Software Catalog
+7. Grants chat permissions to the workshop user (`RHDH_KEYCLOAK_USER`, default `devhub`)
+
+| Manifest | Purpose |
+|----------|---------|
+| [`lightspeed-stack-configmap.yaml`](../../manifests/gitops/developer-hub/lightspeed-stack-configmap.yaml) | Lightspeed Core Service configuration (includes `mcp_servers` → local RHDH MCP endpoint) |
+| [`lightspeed-app-config.yaml`](../../manifests/gitops/developer-hub/lightspeed-app-config.yaml) | CSP, prompts, RBAC policy path |
+| [`lightspeed-llama-stack-secret.yaml`](../../manifests/gitops/developer-hub/lightspeed-llama-stack-secret.yaml) | LLM provider credentials (OpenAI) |
+| [`dynamic-plugins-lightspeed.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-lightspeed.yaml) | Lightspeed frontend/backend plugins |
+| [`dynamic-plugins-mcp.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-mcp.yaml) | MCP server and catalog/TechDocs tool plugins |
+| [`lightspeed-mcp-token-secret.yaml`](../../manifests/gitops/developer-hub/lightspeed-mcp-token-secret.yaml) | Bearer token file for Lightspeed Core → MCP server auth |
+
+After rollout, sign in and use **Lightspeed** from the sidebar (between Orchestrator and Notifications) or the floating spark button (bottom-right). Direct URL: `/lightspeed`.
+
+### Model Context Protocol (MCP) — catalog-aware chat
+
+When `LIGHTSPEED_ENABLED=true`, the workshop also enables **MCP** so Developer Lightspeed can query **your** Developer Hub catalog and TechDocs through tools (not just generic OpenAI answers).
+
+> **Developer Preview:** MCP in RHDH 1.9 is a Developer Preview feature. See [Red Hat MCP documentation](https://docs.redhat.com/en/documentation/red_hat_developer_hub/1.9/html/interacting_with_model_context_protocol_tools_for_red_hat_developer_hub/index).
+
+**Architecture**
+
+```text
+Lightspeed chat  →  Lightspeed Core  →  Llama Stack (MCP client)
+                                              ↓
+                         Developer Hub backend  /api/mcp-actions/v1
+                                              ↓
+                         software-catalog-mcp-tool  |  techdocs-mcp-tool
+```
+
+| Component | Purpose |
+|-----------|---------|
+| [`dynamic-plugins-mcp.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-mcp.yaml) | MCP server + catalog/TechDocs tool plugins |
+| [`app-config-mcp.yaml`](../../manifests/gitops/developer-hub/app-config-mcp.yaml) | Static `MCP_TOKEN` and `pluginSources` |
+| [`lightspeed-stack-configmap.yaml`](../../manifests/gitops/developer-hub/lightspeed-stack-configmap.yaml) | `mcp_servers` → RHDH `/api/mcp-actions/v1` |
+| [`lightspeed-app-config.yaml`](../../manifests/gitops/developer-hub/lightspeed-app-config.yaml) | `lightspeed.mcpServers` token for LCS |
+
+**Configure in `workshop.env`**
+
+```bash
+export MCP_TOKEN="your-long-random-token"   # optional; auto-generated if omitted
+```
+
+On first setup, if `MCP_TOKEN` is `changeme` or empty, `setup-developer-hub-lightspeed.sh` generates one and prints it — save it in `workshop.env` so re-runs keep the same token.
+
+**Requirements**
+
+- `LIGHTSPEED_ENABLED=true` and valid `OPENAI_API_KEY`
+- Use a model that supports **tool calling** — `gpt-4o-mini` (default) or `gpt-4o`. Avoid legacy `gpt-4`.
+- Re-run `./scripts/setup-developer-hub-config.sh` after enabling Lightspeed so MCP plugins and app-config merge are applied.
+- Chat goes through the **Lightspeed UI** (sidebar or floating button). Use **`gpt-4o-mini`** — legacy **`gpt-4` does not support MCP tool calling**.
+- **Start a new chat** after configuration changes; existing threads were created before MCP was wired and keep generic answers.
+- Lightspeed settings (`mcp::backstage`) must be enabled — merged into the main app-config so the backend sends MCP headers.
+
+**Example Lightspeed queries** (start a **new chat**, select `gpt-4o-mini`):
+
+| Ask | What MCP should surface |
+|-----|---------------------------|
+| *Which software templates are available in this Developer Hub?* | Template entities (e.g. `quarkus-react-postgres`) |
+| *List the components registered in the Software Catalog.* | Components such as `people-service` |
+| *What is the people-service component?* | Catalog metadata, owner, links |
+| *Which APIs are in the catalog?* | API entities (e.g. People REST API) |
+| *What TechDocs are available for quarkus-workshop-guide?* | TechDocs content via MCP (when indexed) |
+
+The chat UI also includes starter prompts **Software templates in this portal** and **People Service in the catalog** (configured in `lightspeed-app-config.yaml`).
+
+**External MCP clients** (optional)
+
+Point Cursor, Continue, or other MCP clients at:
+
+- Streamable: `https://<rhdh-host>/api/mcp-actions/v1`
+- SSE (legacy): `https://<rhdh-host>/api/mcp-actions/v1/sse`
+
+Header: `Authorization: Bearer <MCP_TOKEN>`
+
+**Verify MCP server**
+
+```bash
+RHDH_HOST=$(oc get route redhat-developer-hub -n "$RHDH_NAMESPACE" -o jsonpath='{.spec.host}')
+curl -sS -o /dev/null -w "%{http_code}\n" \
+  -H "Authorization: Bearer $MCP_TOKEN" \
+  "https://${RHDH_HOST}/api/mcp-actions/v1"
+```
+
+A `401` means the endpoint exists but the token is wrong; `404` usually means MCP plugins are not loaded yet — re-run `./scripts/setup-developer-hub-config.sh`.
+
+### Troubleshooting Developer Lightspeed
+
+| Symptom | Fix |
+|---------|-----|
+| No chat button after config | Re-run `./scripts/setup-developer-hub-config.sh` with `LIGHTSPEED_ENABLED=true` |
+| Chat errors / no response | Verify `OPENAI_API_KEY` in `workshop.env`; re-run `./scripts/setup-developer-hub-lightspeed.sh`. If logs show `${OPENAI_API_KEY}` literally, the secret was not substituted — re-run after updating `scripts/lib/common.sh` envsubst list |
+| Model dropdown shows `llama-guard3:8b` | That is the safety/moderation model; with `LIGHTSPEED_SAFETY_GUARD=false` (default) chat uses OpenAI only. Pick `gpt-4o-mini` or another OpenAI model |
+| `lightspeed-core` 500 on send | Usually failed Llama Guard moderation — re-run `./scripts/setup-developer-hub-lightspeed.sh` to apply `run-no-guard` config. If rollout hangs, delete stale ReplicaSets: `oc get rs -n $NAMESPACE \| grep redhat-developer-hub` |
+| Chat ignores catalog / generic answers | Use **`gpt-4o-mini`** (not `gpt-4`); start a **new chat**; re-run `./scripts/setup-developer-hub-lightspeed.sh` |
+| MCP skipped in LCS logs | Token file missing — re-run lightspeed setup; check `lightspeed-mcp-token` secret and `/var/secrets/mcp/token` mount on `lightspeed-core` |
+| Permission denied in chat | Confirm `lightspeed-rbac-policies` and `RHDH_KEYCLOAK_USER` match your login |
+| Plugins cache lock | `./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock` |
+
+See [Red Hat docs: Install and configure Developer Lightspeed](https://docs.redhat.com/en/documentation/red_hat_developer_hub/1.9/html/interacting_with_red_hat_developer_lightspeed_for_red_hat_developer_hub/install-and-configure_interacting-with-developer-lightspeed-for-rhdh).
+
 ## Authentication (Keycloak)
 
 Developer Hub uses the shared Keycloak `workshop` realm:
@@ -105,9 +242,9 @@ Developer Hub uses the shared Keycloak `workshop` realm:
 1. Ensures the `developer-hub` client and `devhub` user exist in Keycloak
 2. Configures Kubernetes/Topology cluster access (`setup-developer-hub-kubernetes.sh`)
 3. Patches Developer Hub app-config with OIDC provider settings
-4. Enables Kubernetes, Topology, and Tech Radar dynamic plugins
+4. Enables Kubernetes, Topology, Tech Radar, and (optionally) Developer Lightspeed dynamic plugins
 5. Mounts `RHDH_OIDC_CLIENT_SECRET` into the backend pod
-6. Restarts Developer Hub
+6. Restarts Developer Hub (and Lightspeed sidecars when `LIGHTSPEED_ENABLED=true`)
 
 ## Catalog, OpenAPI, and Tech Radar
 

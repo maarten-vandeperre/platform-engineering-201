@@ -1,6 +1,6 @@
 # Platform Engineering 201 — Complete Tutorial
 
-End-to-end guide from a **clean OpenShift sandbox** to the **full workshop state**: People CRUD app, Keycloak, GitOps, Red Hat Developer Hub with catalog, TechDocs, Tech Radar, Learning Paths, GitHub integrations, Orchestrator workflow, Egyptian theme, and organization entity model.
+End-to-end guide from a **clean OpenShift sandbox** to the **full workshop state**: People CRUD app, Keycloak, GitOps, Red Hat Developer Hub with catalog, TechDocs, Tech Radar, Learning Paths, GitHub integrations, Orchestrator workflow, optional **Developer Lightspeed** (OpenAI chat assistant), Egyptian theme, and organization entity model.
 
 Use this document as the **single tutorial outline**. Each step lists commands, what happens, why it matters, trade-offs, verification, and **exact files to edit** when customizing.
 
@@ -60,6 +60,7 @@ When the tutorial completes successfully, you have:
 | TechDocs — Quarkus guide | `/catalog/default/component/quarkus-workshop-guide/docs` |
 | TechDocs — ADRs | `/catalog/default/component/platform-architecture-records/docs` |
 | Scaffolder template | `/create/templates/default/quarkus-react-postgres-openshift` |
+| Developer Lightspeed (optional) | `/lightspeed` — sidebar item **Lightspeed** and floating chat button when `LIGHTSPEED_ENABLED=true` |
 | Groups / Users / org model | `/catalog?filters[kind]=group`, `/catalog?filters[kind]=user` |
 
 ### Sign-in accounts
@@ -566,7 +567,7 @@ Central developer portal for catalog, docs, templates, K8s/Topology, and Orchest
 
 ### Goal
 
-Wire OIDC, Kubernetes plugin, dynamic plugins, app-config, secrets, and Egyptian theme.
+Wire OIDC, Kubernetes plugin, dynamic plugins, app-config, secrets, Egyptian theme, and (optionally) **Developer Lightspeed** with OpenAI.
 
 ### Commands
 
@@ -575,12 +576,26 @@ Wire OIDC, Kubernetes plugin, dynamic plugins, app-config, secrets, and Egyptian
 ./scripts/setup-developer-hub-config.sh
 ```
 
+Optional — enable **Developer Lightspeed** (requires [OpenAI API key](https://platform.openai.com/)):
+
+```bash
+# In scripts/workshop.env:
+export LIGHTSPEED_ENABLED=true
+export OPENAI_API_KEY=sk-...
+export OPENAI_MODEL=gpt-4o-mini
+
+./scripts/setup-developer-hub-lightspeed.sh
+```
+
+When `LIGHTSPEED_ENABLED=true`, `setup-developer-hub-config.sh` also runs the Lightspeed setup automatically. Full details: [06-install-developer-hub.md § Developer Lightspeed](06-install-developer-hub.md#developer-lightspeed).
+
 ### What happens
 
 | Concern | File(s) |
 |---------|---------|
 | **App config** (OIDC, catalog, Argo CD, Tech Radar, Orchestrator, proxy) | [`manifests/gitops/developer-hub/app-config-rhdh.yaml`](../../manifests/gitops/developer-hub/app-config-rhdh.yaml) |
-| **Dynamic plugins** (K8s, Topology, Tech Radar, GitHub, Orchestrator, notifications) | [`manifests/gitops/developer-hub/dynamic-plugins-rhdh.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-rhdh.yaml) |
+| **Dynamic plugins** (K8s, Topology, Tech Radar, GitHub, Orchestrator, notifications, optional Lightspeed) | [`manifests/gitops/developer-hub/dynamic-plugins-rhdh.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-rhdh.yaml), [`dynamic-plugins-lightspeed.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-lightspeed.yaml) |
+| **Developer Lightspeed** (optional; OpenAI, sidecars, RBAC) | [`lightspeed-app-config.yaml`](../../manifests/gitops/developer-hub/lightspeed-app-config.yaml), [`lightspeed-llama-stack-secret.yaml`](../../manifests/gitops/developer-hub/lightspeed-llama-stack-secret.yaml), [`scripts/setup-developer-hub-lightspeed.sh`](../../scripts/setup-developer-hub-lightspeed.sh) |
 | **Secrets** template | [`manifests/gitops/developer-hub/app-secrets-rhdh.yaml`](../../manifests/gitops/developer-hub/app-secrets-rhdh.yaml) |
 | **Egyptian theme** (colors, typography, page headers) | [`manifests/gitops/developer-hub/egyptian-theme.yaml`](../../manifests/gitops/developer-hub/egyptian-theme.yaml) |
 | **Logos** (SVG → base64 at deploy) | [`manifests/gitops/developer-hub/branding/`](../../manifests/gitops/developer-hub/branding/) |
@@ -607,6 +622,7 @@ Developer Hub reads config at startup; SSO and plugin mount points must match yo
 | Browser title | `RHDH_APP_TITLE` in [`scripts/workshop.env`](../../scripts/workshop.env) |
 | OIDC client | `RHDH_KEYCLOAK_*` in workshop.env + Keycloak realm JSON |
 | Enable/disable plugins | [`dynamic-plugins-rhdh.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-rhdh.yaml) |
+| Developer Lightspeed / OpenAI | [`scripts/workshop.env`](../../scripts/workshop.env) → `LIGHTSPEED_ENABLED`, `OPENAI_API_KEY`, `OPENAI_MODEL`; [02-configuration.md](02-configuration.md) |
 | Orchestrator Data Index URL | `app-config-rhdh.yaml` → `orchestrator.dataIndexService.url` |
 | Light/dark palette | [`egyptian-theme.yaml`](../../manifests/gitops/developer-hub/egyptian-theme.yaml) |
 | Sidebar logos | [`branding/*.svg`](../../manifests/gitops/developer-hub/branding/) |
@@ -802,7 +818,7 @@ Confirm the tutorial end state and recover from common sandbox issues.
 | People API + UI | `test_people_app_api.py`, `test_people_app_ui.py` |
 | OpenAPI | `test_openapi_exposure.py` |
 | Developer Hub K8s/Topology | `test_developer_hub_topology.py` |
-| Catalog, CI, Issues, Tech Radar, Learning Paths, Orchestrator | `test_developer_hub_extensions.py`, `test_developer_hub_catalog.py` |
+| Catalog, CI, Issues, Tech Radar, Learning Paths, Orchestrator, Lightspeed | `test_developer_hub_extensions.py`, `test_developer_hub_catalog.py` |
 
 ### Repair quick reference
 
@@ -814,6 +830,7 @@ Confirm the tutorial end state and recover from common sandbox issues.
 | Empty catalog / Tech Radar | `configure-developer-hub-catalog.sh` | [07-developer-hub-catalog.md](07-developer-hub-catalog.md) |
 | Orchestrator ENOTFOUND | `setup-orchestrator.sh` | [07-developer-hub-catalog.md](07-developer-hub-catalog.md) |
 | GitHub CI authorize fails | `create-github-oauth-app.sh --oauth-app` | [01-prerequisites.md](01-prerequisites.md) |
+| No Lightspeed chat / chat errors | `setup-developer-hub-lightspeed.sh` | [06-install-developer-hub.md](06-install-developer-hub.md#developer-lightspeed) |
 
 Full table: [08-validation.md](08-validation.md)
 
@@ -863,6 +880,7 @@ Use this index when you need to change one concern without reading the whole tut
 | [`manifests/gitops/developer-hub/egyptian-theme.yaml`](../../manifests/gitops/developer-hub/egyptian-theme.yaml) | Branding colors and typography |
 | [`manifests/gitops/developer-hub/branding/`](../../manifests/gitops/developer-hub/branding/) | SVG logos |
 | [`manifests/gitops/developer-hub/backstage-cr.yaml`](../../manifests/gitops/developer-hub/backstage-cr.yaml) | Backstage CR |
+| [`manifests/gitops/developer-hub/lightspeed-*.yaml`](../../manifests/gitops/developer-hub/) | Developer Lightspeed ConfigMaps + OpenAI secret template |
 | [`manifests/helm/rhdh-values.yaml`](../../manifests/helm/rhdh-values.yaml) | Helm RHDH values |
 
 ### Catalog and documentation
@@ -910,6 +928,7 @@ After editing config files, run the minimal scripts for what you changed:
 | People app manifests / app code | `./scripts/deploy-people-app.sh` or `./scripts/repair-people-app.sh` |
 | Keycloak realm | `./scripts/configure-keycloak-realm.sh` |
 | Developer Hub app-config / plugins / theme | `./scripts/setup-developer-hub-config.sh` |
+| Developer Lightspeed / OpenAI | `./scripts/setup-developer-hub-lightspeed.sh` (after `LIGHTSPEED_ENABLED` + `OPENAI_API_KEY` in `workshop.env`) |
 | Catalog entities / Tech Radar / org model | `./scripts/configure-developer-hub-catalog.sh` |
 | TechDocs content | `./scripts/setup-developer-hub-techdocs.sh` |
 | Orchestrator | `./scripts/setup-orchestrator.sh` |
@@ -927,6 +946,7 @@ After editing config files, run the minimal scripts for what you changed:
 - [ ] Catalog lists `people-service`, `people-rest-api`, org teams/users
 - [ ] Tech Radar, Learning Paths, TechDocs tabs load
 - [ ] Orchestrator shows **Create Person in People API**
+- [ ] Optional: Developer Lightspeed chat at `/lightspeed` (OpenAI key configured)
 - [ ] Egyptian theme visible (gold/lapis sidebar, **Nile Developer Hub** title)
 - [ ] `./scripts/validate-workshop.sh` passes
 - [ ] Optional: `./e2e/run-e2e.sh` passes

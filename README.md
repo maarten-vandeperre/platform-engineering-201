@@ -1,6 +1,6 @@
 # Platform Engineering 201
 
-Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, and a Backstage software template.
+Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, optional **Developer Lightspeed** (OpenAI chat assistant), and a Backstage software template.
 
 ## Start here
 
@@ -42,6 +42,14 @@ Validate:
 ./scripts/setup-developer-hub-config.sh
 ./scripts/create-github-oauth-app.sh --oauth-app   # GitHub Actions CI tab
 ```
+
+Optional **Developer Lightspeed** (AI chat via OpenAI + MCP catalog tools — set `LIGHTSPEED_ENABLED=true` and `OPENAI_API_KEY` in `workshop.env`):
+
+```bash
+./scripts/setup-developer-hub-lightspeed.sh
+```
+
+See [Developer Lightspeed](docs/workshop/06-install-developer-hub.md#developer-lightspeed) in the workshop guide.
 
 ## Repository structure
 

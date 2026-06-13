@@ -38,6 +38,26 @@ cp scripts/workshop.env.example scripts/workshop.env
 | `RHDH_KEYCLOAK_USER` | Developer Hub login user | `devhub` |
 | `RHDH_KEYCLOAK_PASSWORD` | Developer Hub login password | `r#dh@t` |
 
+## Developer Lightspeed (OpenAI)
+
+Optional AI chat assistant in Developer Hub. Requires an [OpenAI API key](https://platform.openai.com/).
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `LIGHTSPEED_ENABLED` | Install Lightspeed plugins and sidecars | `false` |
+| `OPENAI_API_KEY` | OpenAI platform API key | `changeme` |
+| `OPENAI_MODEL` | Model id (e.g. `gpt-4o-mini`, `gpt-4o`) | `gpt-4o-mini` |
+| `LIGHTSPEED_VLLM_MAX_TOKENS` | Max tokens hint for the LLM stack | `4096` |
+| `MCP_TOKEN` | Auth token for RHDH MCP server + Lightspeed MCP client | auto-generated if `changeme` |
+
+```bash
+export LIGHTSPEED_ENABLED=true
+export OPENAI_API_KEY=sk-...
+./scripts/setup-developer-hub-config.sh   # installs Lightspeed + MCP plugins
+```
+
+See [06-install-developer-hub](06-install-developer-hub.md#developer-lightspeed) for architecture and troubleshooting.
+
 ## Auto-detect cluster router base
 
 If `CLUSTER_ROUTER_BASE` is unset, bootstrap calls `detect_cluster_router_base()` in `scripts/lib/common.sh`, which reads the OpenShift console route. You can still set it explicitly when auto-detection fails.

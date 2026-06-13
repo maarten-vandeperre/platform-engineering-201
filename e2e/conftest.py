@@ -44,6 +44,8 @@ def workshop_config():
         "api_name": _env("RHDH_API", "people-rest-api"),
         "headless": _env("E2E_HEADLESS", "true").lower() in {"1", "true", "yes"},
         "timeout": int(_env("E2E_TIMEOUT_SECONDS", "180")),
+        "lightspeed_enabled": _env("LIGHTSPEED_ENABLED", "false").lower()
+        in {"1", "true", "yes"},
     }
 
 

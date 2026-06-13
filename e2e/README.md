@@ -40,6 +40,7 @@ Optional environment variables:
 | `RHDH_KEYCLOAK_PASSWORD` | `r#dh@t` |
 | `E2E_HEADLESS` | `true` |
 | `E2E_TIMEOUT_SECONDS` | `180` |
+| `LIGHTSPEED_ENABLED` | `false` (set `true` to run Lightspeed e2e tests) |
 
 Run with a visible browser:
 
@@ -61,3 +62,4 @@ E2E_HEADLESS=false ./e2e/run-e2e.sh
 10. Developer Hub **CI** tab on the People REST API entity loads GitHub Actions content.
 11. Developer Hub Tech Radar page loads workshop technologies.
 12. Developer Hub scaffolder exposes `publish:github` and lists the Quarkus template.
+13. Developer Hub **Developer Lightspeed** (when `LIGHTSPEED_ENABLED=true`): sidecars, plugin, and `/lightspeed` page.

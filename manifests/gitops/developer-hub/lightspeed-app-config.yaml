@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: lightspeed-app-config
+  namespace: ${RHDH_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+data:
+  app-config.yaml: |-
+    backend:
+      csp:
+        upgrade-insecure-requests: false
+      img-src:
+        - "'self'"
+        - "data:"
+        - https://img.freepik.com
+        - https://cdn.dribbble.com
+        - https://avatars.githubusercontent.com
+        - https://secure.gravatar.com
+      script-src:
+        - "'self'"
+        - "'unsafe-eval'"
+        - https://cdn.jsdelivr.net
+
+    lightspeed:
+      mcpServers:
+        - name: mcp::backstage
+          token: "Bearer ${MCP_TOKEN}"
+      prompts:
+        - title: Getting Started with Red Hat Developer Hub
+          message: Can you guide me through the first steps to start using RHDH as a developer, like exploring the Software Catalog and adding my service?
+        - title: Platform Engineering 201 workshop
+          message: What are the main components of this Platform Engineering 201 workshop stack on OpenShift?
+        - title: Software templates in this portal
+          message: Which software templates are available in the Developer Hub catalog? List their names and what each one scaffolds.
+        - title: People Service in the catalog
+          message: What do you know about the people-service component in the Software Catalog?
+      systemPrompt: "You are a helpful assistant focused on Red Hat Developer Hub and the Platform Engineering 201 workshop (People Service, GitOps, catalog, and scaffolder). When asked about this portal, use MCP tools to query the Software Catalog and TechDocs before answering."
+
+    permission:
+      enabled: true
+      rbac:
+        policies-csv-file: /opt/app-root/src/rbac-policies.csv
+        policyFileReload: true

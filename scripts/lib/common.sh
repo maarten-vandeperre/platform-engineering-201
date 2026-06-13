@@ -48,6 +48,13 @@ export WORKSHOP_CATALOG_URL
 export WORKSHOP_INSTALL_METHOD
 export SKIP_ARGOCD
 export RUN_E2E
+export LIGHTSPEED_ENABLED
+export OPENAI_API_KEY
+export OPENAI_MODEL
+export LIGHTSPEED_VLLM_MAX_TOKENS
+export LIGHTSPEED_ENABLE_OPENAI
+export LIGHTSPEED_SAFETY_GUARD
+export MCP_TOKEN
 
 detect_cluster_router_base() {
   if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
@@ -85,7 +92,7 @@ ensure_project() {
 render_manifest() {
   local input="$1"
   envsubst \
-    '${WORKSHOP_NAMESPACE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${WORKSHOP_GITHUB_ORG} ${WORKSHOP_GITHUB_REPO} ${WORKSHOP_BACKEND_IMAGE} ${WORKSHOP_FRONTEND_IMAGE} ${WORKSHOP_IMAGE_REGISTRY} ${RHDH_NAMESPACE} ${RHDH_INSTANCE_NAME} ${RHDH_APP_TITLE} ${GITOPS_NAMESPACE} ${ARGOCD_INSTANCE_NAME} ${ARGOCD_APP_NAME} ${PEOPLE_DB_NAME} ${PEOPLE_DB_USER} ${PEOPLE_DB_PASSWORD} ${PEOPLE_KEYCLOAK_USER} ${PEOPLE_KEYCLOAK_PASSWORD} ${PEOPLE_NOTIFICATION_TOKEN} ${KEYCLOAK_ADMIN_USER} ${KEYCLOAK_ADMIN_PASSWORD} ${KEYCLOAK_REALM} ${KEYCLOAK_CLIENT_ID} ${KEYCLOAK_URL} ${KEYCLOAK_HOST} ${OIDC_AUTH_SERVER_URL} ${OIDC_ENABLED} ${CLUSTER_ROUTER_BASE} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_KEYCLOAK_CLIENT_SECRET} ${RHDH_KEYCLOAK_USER} ${RHDH_KEYCLOAK_PASSWORD} ${RHDH_OIDC_CLIENT_SECRET} ${WORKSHOP_CATALOG_URL} ${BACKEND_SECRET} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${K8S_SA_TOKEN} ${K8S_CA_DATA} ${ORCHESTRATOR_DATA_INDEX_IMAGE} ${KEYCLOAK_SERVICE_USER} ${KEYCLOAK_SERVICE_PASSWORD}' \
+    '${WORKSHOP_NAMESPACE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${WORKSHOP_GITHUB_ORG} ${WORKSHOP_GITHUB_REPO} ${WORKSHOP_BACKEND_IMAGE} ${WORKSHOP_FRONTEND_IMAGE} ${WORKSHOP_IMAGE_REGISTRY} ${RHDH_NAMESPACE} ${RHDH_INSTANCE_NAME} ${RHDH_APP_TITLE} ${GITOPS_NAMESPACE} ${ARGOCD_INSTANCE_NAME} ${ARGOCD_APP_NAME} ${PEOPLE_DB_NAME} ${PEOPLE_DB_USER} ${PEOPLE_DB_PASSWORD} ${PEOPLE_KEYCLOAK_USER} ${PEOPLE_KEYCLOAK_PASSWORD} ${PEOPLE_NOTIFICATION_TOKEN} ${KEYCLOAK_ADMIN_USER} ${KEYCLOAK_ADMIN_PASSWORD} ${KEYCLOAK_REALM} ${KEYCLOAK_CLIENT_ID} ${KEYCLOAK_URL} ${KEYCLOAK_HOST} ${OIDC_AUTH_SERVER_URL} ${OIDC_ENABLED} ${CLUSTER_ROUTER_BASE} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_KEYCLOAK_CLIENT_SECRET} ${RHDH_KEYCLOAK_USER} ${RHDH_KEYCLOAK_PASSWORD} ${RHDH_OIDC_CLIENT_SECRET} ${WORKSHOP_CATALOG_URL} ${BACKEND_SECRET} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${K8S_SA_TOKEN} ${K8S_CA_DATA} ${ORCHESTRATOR_DATA_INDEX_IMAGE} ${KEYCLOAK_SERVICE_USER} ${KEYCLOAK_SERVICE_PASSWORD} ${LIGHTSPEED_ENABLE_OPENAI} ${OPENAI_API_KEY} ${OPENAI_MODEL} ${LIGHTSPEED_VLLM_MAX_TOKENS} ${MCP_TOKEN} ${RHDH_HOST}' \
     <"${input}"
 }
 
@@ -131,6 +138,57 @@ resolve_rhdh_host() {
   get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null \
     || get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null \
     || echo "redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
+}
+
+ensure_mcp_token() {
+  if [[ -n "${MCP_TOKEN:-}" && "${MCP_TOKEN}" != "changeme" ]]; then
+    export MCP_TOKEN
+    return 0
+  fi
+  MCP_TOKEN="$(openssl rand -base64 24 | tr -d '\n/+= ' | head -c 32)"
+  export MCP_TOKEN
+  echo "Generated MCP_TOKEN (add to scripts/workshop.env to keep it stable across re-runs):"
+  echo "  export MCP_TOKEN=\"${MCP_TOKEN}\""
+}
+
+merge_mcp_into_app_config() {
+  local base_file="$1"
+  local mcp_file="$2"
+  local output_file="$3"
+  python3 - "${base_file}" "${mcp_file}" "${output_file}" <<'PY'
+import sys
+import yaml
+
+def merge_lists(base_list, extra_list):
+    seen = {yaml.dump(item, sort_keys=True) for item in base_list}
+    for item in extra_list:
+        key = yaml.dump(item, sort_keys=True)
+        if key not in seen:
+            base_list.append(item)
+            seen.add(key)
+
+def deep_merge(base, extra):
+    for key, value in extra.items():
+        if key not in base:
+            base[key] = value
+            continue
+        if isinstance(base[key], dict) and isinstance(value, dict):
+            deep_merge(base[key], value)
+        elif isinstance(base[key], list) and isinstance(value, list):
+            merge_lists(base[key], value)
+        else:
+            base[key] = value
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    base = yaml.safe_load(handle) or {}
+with open(sys.argv[2], encoding="utf-8") as handle:
+    extra = yaml.safe_load(handle) or {}
+
+deep_merge(base, extra)
+
+with open(sys.argv[3], "w", encoding="utf-8") as handle:
+    yaml.dump(base, handle, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PY
 }
 
 resolve_keycloak_urls() {

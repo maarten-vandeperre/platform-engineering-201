@@ -104,6 +104,7 @@ Plugins enabled in `dynamic-plugins-rhdh.yaml`:
 - `oci://ghcr.io/.../roadiehq-backstage-plugin-github-pull-requests` — Pull Requests tab linked to the repository
 - `backstage-community-plugin-tech-radar`
 - `backstage-community-plugin-tech-radar-backend-dynamic`
+- `red-hat-developer-hub-backstage-plugin-lightspeed` (optional; when `LIGHTSPEED_ENABLED=true` — see [06-install-developer-hub](06-install-developer-hub.md#developer-lightspeed))
 
 Data source in `app-config-rhdh.yaml`:
 

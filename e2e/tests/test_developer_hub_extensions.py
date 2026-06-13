@@ -351,3 +351,123 @@ def test_developer_hub_scaffolder_template_and_github_publish_action(
     assert "quarkus" in lowered
     assert "component name" in lowered
     assert "not registered" not in lowered
+
+
+def _lightspeed_enabled_on_cluster(config):
+    if not shutil.which("oc"):
+        return config.get("lightspeed_enabled", False)
+    try:
+        containers = subprocess.check_output(
+            [
+                "oc",
+                "get",
+                "deployment",
+                "redhat-developer-hub",
+                "-n",
+                config["namespace"],
+                "-o",
+                "jsonpath={.spec.template.spec.containers[*].name}",
+            ],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return config.get("lightspeed_enabled", False)
+    return "llama-stack" in containers.split()
+
+
+def _assert_lightspeed_plugin_loaded(config):
+    if not shutil.which("oc"):
+        pytest.skip("oc CLI not available; skipping Lightspeed plugin check")
+    logs = subprocess.check_output(
+        [
+            "oc",
+            "logs",
+            "-n",
+            config["namespace"],
+            "-l",
+            "app.kubernetes.io/name=developer-hub",
+            "-c",
+            "install-dynamic-plugins",
+            "--tail=800",
+        ],
+        text=True,
+        stderr=subprocess.STDOUT,
+    )
+    assert "red-hat-developer-hub-backstage-plugin-lightspeed" in logs, (
+        "Lightspeed plugin was not installed. Set LIGHTSPEED_ENABLED=true in workshop.env "
+        "and run ./scripts/setup-developer-hub-config.sh"
+    )
+
+
+@pytest.mark.e2e
+def test_developer_hub_lightspeed_sidecars(workshop_config, ready_stack):
+    config = workshop_config
+    if not _lightspeed_enabled_on_cluster(config):
+        pytest.skip(
+            "Developer Lightspeed not enabled (set LIGHTSPEED_ENABLED=true and "
+            "OPENAI_API_KEY, then ./scripts/setup-developer-hub-lightspeed.sh)"
+        )
+
+    assert _lightspeed_enabled_on_cluster(config)
+    for container in ("llama-stack", "lightspeed-core", "init-rag-data"):
+        if container == "init-rag-data":
+            result = subprocess.run(
+                [
+                    "oc",
+                    "get",
+                    "deployment",
+                    "redhat-developer-hub",
+                    "-n",
+                    config["namespace"],
+                    "-o",
+                    f"jsonpath={{.spec.template.spec.initContainers[?(@.name=='{container}')].name}}",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            assert result.stdout.strip() == container, f"missing init container {container}"
+        else:
+            containers = subprocess.check_output(
+                [
+                    "oc",
+                    "get",
+                    "deployment",
+                    "redhat-developer-hub",
+                    "-n",
+                    config["namespace"],
+                    "-o",
+                    "jsonpath={.spec.template.spec.containers[*].name}",
+                ],
+                text=True,
+            )
+            assert container in containers.split()
+
+
+@pytest.mark.e2e
+def test_developer_hub_lightspeed_plugin_and_page(workshop_config, ready_stack, driver):
+    config = workshop_config
+    if not _lightspeed_enabled_on_cluster(config):
+        pytest.skip(
+            "Developer Lightspeed not enabled (set LIGHTSPEED_ENABLED=true and "
+            "OPENAI_API_KEY, then ./scripts/setup-developer-hub-lightspeed.sh)"
+        )
+
+    _assert_lightspeed_plugin_loaded(config)
+
+    lightspeed_url = f"{config['rhdh_url']}/lightspeed"
+    sign_in_via_rhdh_popup(driver, config, lightspeed_url)
+    dismiss_onboarding(driver)
+
+    WebDriverWait(driver, config["timeout"]).until(
+        EC.url_contains("/lightspeed")
+    )
+    page_text = _wait_for_text(
+        driver,
+        config["timeout"],
+        "Lightspeed",
+        "Developer Hub",
+    )
+    lowered = page_text.lower()
+    assert "lightspeed" in lowered or "assistant" in lowered or "chat" in lowered
+    assert "not registered" not in lowered
