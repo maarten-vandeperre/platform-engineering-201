@@ -1,5 +1,7 @@
 # Platform Engineering 201
 
+This is a demo branch - just to showcase a pr
+
 Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, and a Backstage software template.
 
 ## Start here
