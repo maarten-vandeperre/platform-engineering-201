@@ -35,6 +35,9 @@ If Argo CD is ready, configure its token before or after RHDH config:
 | `dynamic-plugins-rhdh.yaml` | Kubernetes, Topology, Tech Radar, GitHub scaffolder plugins |
 | `dynamic-plugins-pvc.yaml` | Persistent volume claim for the dynamic plugins cache |
 | `dynamic-plugins-cache-deployment-patch.yaml` | Replaces ephemeral `dynamic-plugins-root` with the PVC |
+| `dynamic-plugins-mcp.yaml` | MCP server and catalog/TechDocs tool plugins (Lightspeed) |
+| `dynamic-plugins-aap.yaml` | Ansible Automation Platform frontend + scaffolder plugins |
+| `app-config-aap-snippet.yaml` | AAP Controller connection, creator service, template catalog |
 | `app-secrets-rhdh.yaml` | Secret template for tokens and OIDC client secret |
 | `catalog-configmap.yaml` | Inline catalog entities (component, API, template) |
 | `catalog-server.yaml` | HTTP server for catalog entities, OpenAPI file, Tech Radar JSON |
@@ -226,6 +229,78 @@ A `401` means the endpoint exists but the token is wrong; `404` usually means MC
 
 See [Red Hat docs: Install and configure Developer Lightspeed](https://docs.redhat.com/en/documentation/red_hat_developer_hub/1.9/html/interacting_with_red_hat_developer_lightspeed_for_red_hat_developer_hub/install-and-configure_interacting-with-developer-lightspeed-for-rhdh).
 
+## Ansible Automation Platform
+
+The [Ansible Automation Platform plugin](https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.5/html/integrating_with_red_hat_developer_hub/index) adds an **Ansible** sidebar entry (`/ansible`), connects to your Controller, and registers upstream Ansible software templates.
+
+> **Full guide:** [06c — Ansible Automation Platform plugin](06c-ansible-automation-platform.md) (prerequisites, step-by-step setup, architecture, verification, troubleshooting).
+
+### Quick start
+
+```bash
+./scripts/configure-aap-workshop-env.sh \
+  --url https://sandbox-aap-rh-ee-mvandepe-dev.apps.rm1.0a51.p1.openshiftapps.com \
+  --username admin \
+  --password 'your-password' \
+  --rh-registry-username <your-rh-registry-sa> \
+  --rh-registry-token <your-rh-registry-token> \
+  --apply
+```
+
+Or set manually in `scripts/workshop.env`:
+
+```bash
+export AAP_ENABLED=true
+export AAP_CONTROLLER_URL=https://sandbox-aap-controller-<ns>.<router>   # optional; auto-detected
+export AAP_TOKEN=<controller-personal-access-token>
+export RH_REGISTRY_USERNAME=<rh-registry-service-account>
+export RH_REGISTRY_TOKEN=<rh-registry-token>
+export AAP_CHECK_SSL=false
+```
+
+Then:
+
+```bash
+./scripts/setup-developer-hub-config.sh
+# or: ./scripts/setup-developer-hub-aap.sh
+```
+
+### Required variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AAP_ENABLED` | yes | Set to `true` to install Ansible dynamic plugins and merge app-config |
+| `AAP_TOKEN` | yes | **Personal access token** from Controller (**User → Tokens**). Not the admin password |
+| `RH_REGISTRY_USERNAME` | yes | [Red Hat registry service account](https://access.redhat.com/terms-based-registry/accounts) name |
+| `RH_REGISTRY_TOKEN` | yes | Registry service account token — required for OCI plugin pulls |
+| `AAP_CONTROLLER_URL` | recommended | Controller base URL. Auto-detected from `sandbox-aap-controller` route when empty |
+| `AAP_CHECK_SSL` | no | Verify Controller TLS cert. Default `false` for sandbox |
+
+See [06c-ansible-automation-platform.md](06c-ansible-automation-platform.md) for optional variables, PAT creation, sandbox AAP notes, and full troubleshooting.
+
+### What gets installed
+
+| Artifact | Purpose |
+|----------|---------|
+| [`dynamic-plugins-aap.yaml`](../../manifests/gitops/developer-hub/dynamic-plugins-aap.yaml) | Frontend `/ansible` plugin + scaffolder backend module (OCI from `registry.redhat.io`) |
+| [`app-config-aap-snippet.yaml`](../../manifests/gitops/developer-hub/app-config-aap-snippet.yaml) | `ansible.rhaap` Controller connection + Ansible template catalog location |
+| [`setup-developer-hub-aap.sh`](../../scripts/setup-developer-hub-aap.sh) | Registry pull secret, dev-tools sidecar, optional PAT auto-creation |
+| `redhat-developer-hub-dynamic-plugins-registry-auth` | `auth.json` for OCI plugin pulls |
+| `ansible-devtools-server` sidecar | Local creator service on port 8000 for Ansible templates |
+
+After rollout, open **Ansible** in the sidebar or visit `/ansible`.
+
+### Troubleshooting (summary)
+
+| Symptom | Fix |
+|---------|-----|
+| `Init:CrashLoopBackOff` / registry unauthorized | Set `RH_REGISTRY_USERNAME` / `RH_REGISTRY_TOKEN` |
+| Ansible page empty / API errors | Verify `AAP_CONTROLLER_URL` and `AAP_TOKEN` (PAT, not password) |
+| Software templates fail | Ensure `ansible-devtools-server` sidecar is running |
+| AAP sandbox 503 | Confirm `sandbox-aap` pods are running |
+
+Full troubleshooting table: [06c-ansible-automation-platform.md § Troubleshooting](06c-ansible-automation-platform.md#troubleshooting).
+
 ## Authentication (Keycloak)
 
 Developer Hub uses the shared Keycloak `workshop` realm:
@@ -242,9 +317,9 @@ Developer Hub uses the shared Keycloak `workshop` realm:
 1. Ensures the `developer-hub` client and `devhub` user exist in Keycloak
 2. Configures Kubernetes/Topology cluster access (`setup-developer-hub-kubernetes.sh`)
 3. Patches Developer Hub app-config with OIDC provider settings
-4. Enables Kubernetes, Topology, Tech Radar, and (optionally) Developer Lightspeed dynamic plugins
+4. Enables Kubernetes, Topology, Tech Radar, and (optionally) Developer Lightspeed and Ansible dynamic plugins
 5. Mounts `RHDH_OIDC_CLIENT_SECRET` into the backend pod
-6. Restarts Developer Hub (and Lightspeed sidecars when `LIGHTSPEED_ENABLED=true`)
+6. Restarts Developer Hub (Lightspeed sidecars when `LIGHTSPEED_ENABLED=true`; Ansible setup when `AAP_ENABLED=true`)
 
 ## Catalog, OpenAPI, and Tech Radar
 

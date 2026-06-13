@@ -1,0 +1,24 @@
+  - disabled: false
+    package: 'oci://registry.redhat.io/ansible-automation-platform/automation-portal:2.1!ansible-plugin-backstage-rhaap'
+    pluginConfig:
+      dynamicPlugins:
+        frontend:
+          ansible.plugin-backstage-rhaap:
+            appIcons:
+              - importName: AnsibleLogo
+                name: AnsibleLogo
+            dynamicRoutes:
+              - importName: AnsiblePage
+                menuItem:
+                  icon: AnsibleLogo
+                  text: Ansible
+                path: /ansible
+  - disabled: false
+    package: 'oci://registry.redhat.io/ansible-automation-platform/automation-portal:2.1!ansible-backstage-plugin-catalog-backend-module-rhaap'
+    pluginConfig: {}
+  - disabled: false
+    package: 'oci://registry.redhat.io/ansible-automation-platform/automation-portal:2.1!ansible-plugin-scaffolder-backend-module-backstage-rhaap'
+    pluginConfig:
+      dynamicPlugins:
+        backend:
+          ansible.plugin-scaffolder-backend-module-backstage-rhaap: null

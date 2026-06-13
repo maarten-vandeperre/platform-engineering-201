@@ -135,6 +135,8 @@ REPAIR_RESET_POSTGRES_DATA=true ./scripts/repair-people-app.sh
 | Wrong cluster URLs | Set `CLUSTER_ROUTER_BASE` in `workshop.env` and re-run config scripts |
 | No Lightspeed chat button | `LIGHTSPEED_ENABLED=true`, valid `OPENAI_API_KEY`, `./scripts/setup-developer-hub-lightspeed.sh` |
 | Lightspeed chat errors | Check `oc logs deploy/redhat-developer-hub -c llama-stack`; verify OpenAI key and model |
+| No Ansible sidebar / `Init:CrashLoopBackOff` | `AAP_ENABLED=true`, `RH_REGISTRY_USERNAME`/`RH_REGISTRY_TOKEN`, `./scripts/setup-developer-hub-aap.sh` — [06c-ansible-automation-platform.md](06c-ansible-automation-platform.md) |
+| Ansible page empty / Controller errors | Verify `AAP_CONTROLLER_URL` and `AAP_TOKEN` (Controller PAT, not admin password) |
 
 ## Clean up
 

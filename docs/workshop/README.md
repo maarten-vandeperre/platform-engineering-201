@@ -113,6 +113,7 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 | 5 | [04-deploy-people-app](04-deploy-people-app.md) | PostgreSQL, builds, Quarkus + React |
 | 6 | [05-setup-argocd](05-setup-argocd.md) | Argo CD instance + Application (optional) |
 | 7 | [06-install-developer-hub](06-install-developer-hub.md) | Developer Hub instance + OIDC |
+| 7b | [06c-ansible-automation-platform](06c-ansible-automation-platform.md) | Optional AAP plugin (`/ansible`) |
 | 8 | [07-developer-hub-catalog](07-developer-hub-catalog.md) | Catalog, OpenAPI, Tech Radar |
 | 9 | [08-validation](08-validation.md) | Validation, e2e, troubleshooting |
 
@@ -126,6 +127,7 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 - **Create → Template (Publish to GitHub)**: GitHub PAT — `./scripts/setup-github-auth.sh` (see [01-prerequisites](01-prerequisites.md))
 - **Kubernetes / Topology**: People Service workloads in your namespace
 - **Orchestrator**: `create-person` workflow at `/orchestrator`
+- **Ansible** (optional): AAP Controller integration at `/ansible` when `AAP_ENABLED=true` — [06c-ansible-automation-platform.md](06c-ansible-automation-platform.md)
 - **Organization model**: 3 teams, 8 users, 2 platforms, 4 apps — [entity diagram](../../manifests/gitops/catalog/diagrams/organization-entity-diagram.md)
 - **Egyptian theme**: gold/lapis branding — see [TUTORIAL Module 9](TUTORIAL.md#module-9--developer-hub-configuration)
 - **Create → Template**: Quarkus + React + PostgreSQL scaffolder
@@ -151,6 +153,8 @@ Workloads may be scaled to zero between sessions:
 ./scripts/configure-developer-hub-catalog.sh
 ./scripts/setup-developer-hub-config.sh
 ./scripts/setup-developer-hub-lightspeed.sh   # optional; LIGHTSPEED_ENABLED + OPENAI_API_KEY
+./scripts/setup-developer-hub-aap.sh          # optional; AAP_ENABLED + AAP_* + RH_REGISTRY_*
+./scripts/configure-aap-workshop-env.sh       # recommended; see 06c-ansible-automation-platform.md
 ./scripts/create-github-oauth-app.sh --oauth-app   # CI tab Authorize GitHub
 ```
 

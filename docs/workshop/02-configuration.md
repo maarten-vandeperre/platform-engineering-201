@@ -58,6 +58,42 @@ export OPENAI_API_KEY=sk-...
 
 See [06-install-developer-hub](06-install-developer-hub.md#developer-lightspeed) for architecture and troubleshooting.
 
+## Ansible Automation Platform (AAP)
+
+Optional integration with Ansible Automation Platform Controller in Developer Hub — adds `/ansible` sidebar, Controller content, and Ansible software templates.
+
+> **Full guide:** [06c — Ansible Automation Platform plugin](06c-ansible-automation-platform.md)
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `AAP_ENABLED` | Install Ansible dynamic plugins and app-config | `false` |
+| `AAP_CONTROLLER_URL` | Controller base URL | auto-detected from `sandbox-aap-controller` route |
+| `AAP_TOKEN` | Controller personal access token (**User → Tokens**) | `changeme` |
+| `AAP_CHECK_SSL` | Verify Controller TLS certificate | `false` |
+| `RH_REGISTRY_USERNAME` | Red Hat registry service account for OCI plugin pulls | `changeme` |
+| `RH_REGISTRY_TOKEN` | Red Hat registry token | `changeme` |
+| `AAP_ADMIN_USERNAME` | Admin user (auto-create PAT only) | `admin` |
+| `AAP_ADMIN_PASSWORD` | Admin password (auto-create PAT only) | `changeme` |
+| `AAP_CREATOR_SERVICE_ENABLED` | Add `ansible-devtools-server` sidecar for templates | `true` |
+| `AAP_DEVTOOLS_IMAGE` | Dev-tools sidecar image | `registry.redhat.io/.../ansible-dev-tools-rhel8:latest` |
+| `RH_REGISTRY_PULL_SECRET` | Reuse existing OpenShift pull secret instead of username/token | *(empty)* |
+
+```bash
+./scripts/configure-aap-workshop-env.sh \
+  --url https://sandbox-aap-rh-ee-mvandepe-dev.apps.rm1.0a51.p1.openshiftapps.com \
+  --username admin \
+  --password 'your-password' \
+  --rh-registry-username <your-rh-registry-sa> \
+  --rh-registry-token <your-rh-registry-token> \
+  --apply
+```
+
+Or set variables manually in `scripts/workshop.env` and run `./scripts/setup-developer-hub-config.sh`.
+
+**Important:** `AAP_ADMIN_USERNAME` / `AAP_ADMIN_PASSWORD` are **not** used by the plugin — only for optional PAT auto-creation via `configure-aap-workshop-env.sh`. The plugin requires `AAP_TOKEN` and `RH_REGISTRY_*`.
+
+See [06c-ansible-automation-platform.md](06c-ansible-automation-platform.md) for step-by-step setup, verification, and troubleshooting.
+
 ## Auto-detect cluster router base
 
 If `CLUSTER_ROUTER_BASE` is unset, bootstrap calls `detect_cluster_router_base()` in `scripts/lib/common.sh`, which reads the OpenShift console route. You can still set it explicitly when auto-detection fails.

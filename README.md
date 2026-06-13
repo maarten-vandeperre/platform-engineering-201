@@ -1,6 +1,6 @@
 # Platform Engineering 201
 
-Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, optional **Developer Lightspeed** (OpenAI chat assistant), and a Backstage software template.
+Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, optional **Developer Lightspeed** (OpenAI chat assistant), optional **Ansible Automation Platform** plugin, and a Backstage software template.
 
 ## Start here
 
@@ -50,6 +50,20 @@ Optional **Developer Lightspeed** (AI chat via OpenAI + MCP catalog tools — se
 ```
 
 See [Developer Lightspeed](docs/workshop/06-install-developer-hub.md#developer-lightspeed) in the workshop guide.
+
+Optional **Ansible Automation Platform** plugin (Controller integration at `/ansible`):
+
+```bash
+./scripts/configure-aap-workshop-env.sh \
+  --url https://sandbox-aap-rh-ee-mvandepe-dev.apps.rm1.0a51.p1.openshiftapps.com \
+  --username admin \
+  --password 'your-password' \
+  --rh-registry-username <your-rh-registry-sa> \
+  --rh-registry-token <your-rh-registry-token> \
+  --apply
+```
+
+See [Ansible Automation Platform plugin](docs/workshop/06c-ansible-automation-platform.md).
 
 ## Repository structure
 

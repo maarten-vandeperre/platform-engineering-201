@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/aap.sh"
 
 echo "Configuring Developer Hub Keycloak SSO in ${RHDH_NAMESPACE}..."
 
@@ -153,6 +155,26 @@ render_app_config() {
     rm -f "${lightspeed_file}" "${merged_ls}"
   fi
 
+  if is_aap_enabled; then
+    local aap_file merged_aap
+    aap_file="$(mktemp)"
+    merged_aap="$(mktemp)"
+    export AAP_CHECK_SSL="${AAP_CHECK_SSL:-false}"
+    # Only auto-detect local sandbox-aap when AAP_CONTROLLER_URL is unset — external workshop AAP must be set explicitly.
+    if [[ -z "${AAP_CONTROLLER_URL:-}" || "${AAP_CONTROLLER_URL}" == "changeme" ]]; then
+      if detected_url="$(aap_detect_controller_url 2>/dev/null || true)" && [[ -n "${detected_url}" ]]; then
+        AAP_CONTROLLER_URL="${detected_url}"
+      fi
+    fi
+    export AAP_CONTROLLER_URL="${AAP_CONTROLLER_URL:-changeme}"
+    export AAP_TOKEN="${AAP_TOKEN:-changeme}"
+    envsubst '${AAP_CONTROLLER_URL} ${AAP_TOKEN} ${AAP_CHECK_SSL}' \
+      <"${MANIFESTS_DIR}/developer-hub/app-config-aap-snippet.yaml" >"${aap_file}"
+    merge_mcp_into_app_config "${base_file}" "${aap_file}" "${merged_aap}"
+    cp "${merged_aap}" "${base_file}"
+    rm -f "${aap_file}" "${merged_aap}"
+  fi
+
   envsubst '${EGYPTIAN_FULL_LOGO} ${EGYPTIAN_ICON_LOGO}' \
     <"${MANIFESTS_DIR}/developer-hub/egyptian-theme.yaml" \
     | sed 's/^/  /' >"${theme_file}"
@@ -180,6 +202,12 @@ is_lightspeed_enabled() {
     || "${LIGHTSPEED_ENABLED:-false}" == "yes" ]]
 }
 
+is_aap_enabled() {
+  [[ "${AAP_ENABLED:-false}" == "true" \
+    || "${AAP_ENABLED:-false}" == "1" \
+    || "${AAP_ENABLED:-false}" == "yes" ]]
+}
+
 render_dynamic_plugins() {
   local base_file merged_file
   base_file="$(mktemp)"
@@ -193,6 +221,10 @@ render_dynamic_plugins() {
     cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-lightspeed.yaml" >>"${merged_file}"
     printf '\n' >>"${merged_file}"
     cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-mcp.yaml" >>"${merged_file}"
+  fi
+  if is_aap_enabled; then
+    printf '\n' >>"${merged_file}"
+    cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-aap.yaml" >>"${merged_file}"
   fi
 
   cat "${merged_file}"
@@ -279,6 +311,22 @@ if is_lightspeed_enabled && [[ "${OPENAI_API_KEY:-changeme}" == "changeme" ]]; t
   echo "  ./scripts/setup-developer-hub-lightspeed.sh"
 fi
 
+if is_aap_enabled && [[ "${AAP_TOKEN:-changeme}" == "changeme" ]]; then
+  echo ""
+  echo "WARNING: AAP_ENABLED=true but AAP_TOKEN is 'changeme'."
+  echo "Create a Controller personal access token (User → Tokens) or set AAP_ADMIN_PASSWORD so"
+  echo "setup-developer-hub-aap.sh can mint one:"
+  echo "  export AAP_TOKEN=<pat>   # in scripts/workshop.env"
+  echo "  ./scripts/setup-developer-hub-aap.sh"
+fi
+
+if is_aap_enabled && [[ "${RH_REGISTRY_TOKEN:-changeme}" == "changeme" ]]; then
+  echo ""
+  echo "WARNING: RH_REGISTRY_USERNAME/RH_REGISTRY_TOKEN not set."
+  echo "Ansible OCI dynamic plugins require registry.redhat.io auth:"
+  echo "  https://access.redhat.com/terms-based-registry/accounts"
+fi
+
 "${SCRIPTS_DIR}/setup-developer-hub-techdocs.sh" || echo "Warning: TechDocs volume setup skipped."
 
 if is_lightspeed_enabled; then
@@ -288,6 +336,15 @@ elif [[ "${LIGHTSPEED_ENABLED:-false}" != "false" ]]; then
   echo ""
   echo "NOTE: Set LIGHTSPEED_ENABLED=true and OPENAI_API_KEY in workshop.env, then re-run:"
   echo "  ./scripts/setup-developer-hub-lightspeed.sh"
+fi
+
+if is_aap_enabled; then
+  "${SCRIPTS_DIR}/setup-developer-hub-aap.sh" --force-rollout || \
+    echo "Warning: Ansible Automation Platform setup failed; see docs/workshop/06-install-developer-hub.md"
+elif [[ "${AAP_ENABLED:-false}" != "false" ]]; then
+  echo ""
+  echo "NOTE: Set AAP_ENABLED=true and AAP_* / RH_REGISTRY_* in workshop.env, then re-run:"
+  echo "  ./scripts/setup-developer-hub-aap.sh"
 fi
 
 echo "Developer Hub configuration complete."

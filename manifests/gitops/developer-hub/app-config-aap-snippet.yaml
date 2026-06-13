@@ -1,0 +1,28 @@
+ansible:
+  creatorService:
+    baseUrl: 127.0.0.1
+    port: '8000'
+  rhaap:
+    baseUrl: ${AAP_CONTROLLER_URL}
+    token: ${AAP_TOKEN}
+    checkSSL: ${AAP_CHECK_SSL}
+catalog:
+  providers:
+    rhaap:
+      workshop:
+        orgs: Default
+        sync:
+          orgsUsersTeams:
+            schedule:
+              frequency: { minutes: 60 }
+              timeout: { minutes: 15 }
+          jobTemplates:
+            enabled: true
+            schedule:
+              frequency: { minutes: 60 }
+              timeout: { minutes: 15 }
+  locations:
+    - type: url
+      target: https://github.com/ansible/ansible-rhdh-templates/blob/main/all.yaml
+      rules:
+        - allow: [Template]
