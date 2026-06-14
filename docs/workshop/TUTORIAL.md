@@ -94,7 +94,7 @@ Ensure you have an empty or reset OpenShift project before installing workshop r
 
 ### Prerequisites
 
-- OpenShift 4.x sandbox or dedicated namespace
+- OpenShift 4.x sandbox or dedicated namespace (you can get one for free at [developers.redhat.com](https://developers.redhat.com))
 - `oc` logged in with permission to create Deployments, Routes, PVCs, BuildConfigs, Subscriptions (or Helm)
 
 ### Commands
