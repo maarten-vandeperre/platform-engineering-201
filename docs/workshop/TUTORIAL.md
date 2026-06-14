@@ -72,7 +72,8 @@ When the tutorial completes successfully, you have:
 
 ### Sample URLs
 
-Replace `<ns>` and `<router>` with your namespace and cluster router base:
+Replace `<ns>` and `<router>` with your namespace and cluster router base:  
+_For me, with my [developers.redhat.com](https://developers.redhat.com) cluster, it is 'https://console-openshift-console.apps.rm2.thpm.p1.openshiftapps.com/'_
 
 ```text
 People UI:       https://people-frontend-<ns>.<router>/
