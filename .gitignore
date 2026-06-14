@@ -29,6 +29,10 @@ scripts/workshop.env
 # Java / Node
 **/target/
 **/node_modules/
+custom-plugins/**/.build/
+custom-plugins/**/dist/
+custom-plugins/**/dist-dynamic/
+custom-plugins/**/dist-types/
 **/dist/
 
 # Maven

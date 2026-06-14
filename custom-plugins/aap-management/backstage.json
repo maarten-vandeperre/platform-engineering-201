@@ -1,0 +1,8 @@
+{
+  "backend": {
+    "packages": ["plugins/aap-management-backend"]
+  },
+  "frontend": {
+    "packages": ["plugins/aap-management"]
+  }
+}

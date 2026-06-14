@@ -175,6 +175,22 @@ render_app_config() {
     rm -f "${aap_file}" "${merged_aap}"
   fi
 
+  if is_aap_management_enabled; then
+    local mgmt_file merged_mgmt
+    mgmt_file="$(mktemp)"
+    merged_mgmt="$(mktemp)"
+    export AAP_CHECK_SSL="${AAP_CHECK_SSL:-false}"
+    export AAP_CONTROLLER_URL="${AAP_CONTROLLER_URL:-changeme}"
+    export AAP_TOKEN="${AAP_TOKEN:-changeme}"
+    export AAP_ADMIN_USERNAME="${AAP_ADMIN_USERNAME:-admin}"
+    export AAP_ADMIN_PASSWORD="${AAP_ADMIN_PASSWORD:-changeme}"
+    envsubst '${AAP_CONTROLLER_URL} ${AAP_TOKEN} ${AAP_ADMIN_USERNAME} ${AAP_ADMIN_PASSWORD} ${AAP_CHECK_SSL}' \
+      <"${MANIFESTS_DIR}/developer-hub/app-config-aap-management-snippet.yaml" >"${mgmt_file}"
+    merge_mcp_into_app_config "${base_file}" "${mgmt_file}" "${merged_mgmt}"
+    cp "${merged_mgmt}" "${base_file}"
+    rm -f "${mgmt_file}" "${merged_mgmt}"
+  fi
+
   envsubst '${EGYPTIAN_FULL_LOGO} ${EGYPTIAN_ICON_LOGO}' \
     <"${MANIFESTS_DIR}/developer-hub/egyptian-theme.yaml" \
     | sed 's/^/  /' >"${theme_file}"
@@ -208,6 +224,22 @@ is_aap_enabled() {
     || "${AAP_ENABLED:-false}" == "yes" ]]
 }
 
+is_aap_management_enabled() {
+  [[ "${AAP_MANAGEMENT_ENABLED:-false}" == "true" \
+    || "${AAP_MANAGEMENT_ENABLED:-false}" == "1" \
+    || "${AAP_MANAGEMENT_ENABLED:-false}" == "yes" ]]
+}
+
+ensure_aap_management_plugin_build() {
+  local integrity_file="${SCRIPTS_DIR}/../custom-plugins/aap-management/.build/integrity.env"
+  if [[ ! -f "${integrity_file}" ]]; then
+    "${SCRIPTS_DIR}/build-custom-aap-management-plugin.sh"
+  fi
+  # shellcheck disable=SC1090
+  source "${integrity_file}"
+  export AAP_MGMT_BACKEND_INTEGRITY AAP_MGMT_FRONTEND_INTEGRITY
+}
+
 render_dynamic_plugins() {
   local base_file merged_file
   base_file="$(mktemp)"
@@ -225,6 +257,12 @@ render_dynamic_plugins() {
   if is_aap_enabled; then
     printf '\n' >>"${merged_file}"
     cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-aap.yaml" >>"${merged_file}"
+  fi
+  if is_aap_management_enabled; then
+    ensure_aap_management_plugin_build
+    printf '\n' >>"${merged_file}"
+    envsubst '${WORKSHOP_NAMESPACE} ${AAP_MGMT_BACKEND_INTEGRITY} ${AAP_MGMT_FRONTEND_INTEGRITY}' \
+      <"${MANIFESTS_DIR}/developer-hub/dynamic-plugins-aap-management.yaml" >>"${merged_file}"
   fi
 
   cat "${merged_file}"
@@ -246,6 +284,10 @@ apply_dynamic_plugins_config() {
 
 APP_CONFIG=$(render_app_config)
 apply_dynamic_plugins_config
+
+if is_aap_management_enabled; then
+  "${SCRIPTS_DIR}/setup-custom-aap-management-plugin.sh" --no-rollout
+fi
 
 if oc get configmap redhat-developer-hub-app-config -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   oc create configmap redhat-developer-hub-app-config -n "${RHDH_NAMESPACE}" \

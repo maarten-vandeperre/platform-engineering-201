@@ -1,0 +1,16 @@
+{
+  "name": "aap-management-workspace",
+  "private": true,
+  "workspaces": [
+    "plugins/*"
+  ],
+  "scripts": {
+    "tsc": "tsc -b",
+    "build": "yarn tsc && yarn workspace @internal/plugin-aap-management-backend build && yarn workspace @internal/plugin-aap-management build",
+    "export": "yarn workspace @internal/plugin-aap-management-backend export-dynamic && yarn workspace @internal/plugin-aap-management export-dynamic",
+    "clean": "yarn workspace @internal/plugin-aap-management-backend clean && yarn workspace @internal/plugin-aap-management clean"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

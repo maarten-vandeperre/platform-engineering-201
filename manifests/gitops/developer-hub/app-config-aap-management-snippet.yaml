@@ -1,0 +1,6 @@
+aapManagement:
+  controllerUrl: ${AAP_CONTROLLER_URL}
+  token: ${AAP_TOKEN}
+  username: ${AAP_ADMIN_USERNAME}
+  password: ${AAP_ADMIN_PASSWORD}
+  checkSSL: ${AAP_CHECK_SSL}

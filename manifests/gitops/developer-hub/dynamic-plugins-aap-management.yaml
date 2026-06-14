@@ -1,0 +1,21 @@
+  - disabled: false
+    package: 'http://aap-management-plugin-server.${WORKSHOP_NAMESPACE}.svc.cluster.local:8080/plugin-aap-management-backend-dynamic.tgz'
+    integrity: ${AAP_MGMT_BACKEND_INTEGRITY}
+    pluginConfig:
+      dynamicPlugins:
+        backend:
+          aap-management: null
+  - disabled: false
+    package: 'http://aap-management-plugin-server.${WORKSHOP_NAMESPACE}.svc.cluster.local:8080/plugin-aap-management-dynamic.tgz'
+    integrity: ${AAP_MGMT_FRONTEND_INTEGRITY}
+    pluginConfig:
+      dynamicPlugins:
+        frontend:
+          internal.plugin-aap-management:
+            dynamicRoutes:
+              - path: /aap-management
+                module: PluginRoot
+                importName: AapManagementPage
+                menuItem:
+                  icon: catalog
+                  text: AAP Templates

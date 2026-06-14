@@ -1,0 +1,7 @@
+{
+  "files": [],
+  "references": [
+    { "path": "plugins/aap-management-backend" },
+    { "path": "plugins/aap-management" }
+  ]
+}

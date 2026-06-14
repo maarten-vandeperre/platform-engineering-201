@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aap-management-plugin-server
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app: aap-management-plugin-server
+    app.kubernetes.io/part-of: developer-hub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aap-management-plugin-server
+  template:
+    metadata:
+      labels:
+        app: aap-management-plugin-server
+    spec:
+      containers:
+        - name: http
+          image: python:3.12-alpine
+          command: ["python", "-m", "http.server", "8080", "--directory", "/plugins"]
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: plugins
+              mountPath: /plugins
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+            runAsNonRoot: true
+            runAsUser: 1003920000
+      volumes:
+        - name: plugins
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aap-management-plugin-server
+  namespace: ${WORKSHOP_NAMESPACE}
+  labels:
+    app.kubernetes.io/part-of: developer-hub
+spec:
+  selector:
+    app: aap-management-plugin-server
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
