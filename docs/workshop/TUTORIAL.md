@@ -111,17 +111,16 @@ export WORKSHOP_NAMESPACE=rh-ee-<your-user>-dev
 oc login --token=<token> --server=<api-url>
 oc new-project "${WORKSHOP_NAMESPACE}" 2>/dev/null || oc project "${WORKSHOP_NAMESPACE}"
 
-# Optional: remove prior workshop resources (destructive)
-oc delete application people-service -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
-oc delete argocd workshop-gitops -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
-oc delete backstage developer-hub -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
-oc delete deployment,svc,route,bc,is,pvc,secret -l app.kubernetes.io/part-of=people-service -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
-oc delete deploy,svc,route keycloak workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
+# Optional: remove prior workshop resources (destructive; safe if demo was partial)
+./scripts/cleanup-workshop.sh --dry-run
+./scripts/cleanup-workshop.sh --yes
 ```
+
+See [09-cleanup-after-demo.md](09-cleanup-after-demo.md).
 
 ### What happens
 
-OpenShift project is selected. Optional cleanup removes People app, Keycloak, catalog server, Argo CD Application, and Developer Hub CR leftovers.
+OpenShift project is selected. Optional cleanup removes People app, Keycloak, catalog server, Argo CD, Developer Hub, orchestrator, and related workshop resources via [`cleanup-workshop.sh`](../../scripts/cleanup-workshop.sh).
 
 ### Why
 
@@ -852,6 +851,18 @@ Confirm the tutorial end state and recover from common sandbox issues.
 
 Full table: [08-validation.md](08-validation.md)
 
+### Cleanup after demo
+
+When the demo is finished and you want an empty namespace for the next run:
+
+```bash
+./scripts/cleanup-workshop.sh --dry-run
+./scripts/cleanup-workshop.sh --yes
+./scripts/bootstrap-workshop.sh
+```
+
+See [09-cleanup-after-demo.md](09-cleanup-after-demo.md).
+
 ---
 
 ## Configuration reference (all customizable files)
@@ -866,6 +877,7 @@ Use this index when you need to change one concern without reading the whole tut
 | [`scripts/workshop.env.example`](../../scripts/workshop.env.example) | Template with defaults |
 | [`scripts/lib/common.sh`](../../scripts/lib/common.sh) | Shared helpers, `envsubst`, `render_manifest` |
 | [`scripts/bootstrap-workshop.sh`](../../scripts/bootstrap-workshop.sh) | Full install orchestration |
+| [`scripts/cleanup-workshop.sh`](../../scripts/cleanup-workshop.sh) | Remove demo resources for a fresh start |
 
 ### People application
 

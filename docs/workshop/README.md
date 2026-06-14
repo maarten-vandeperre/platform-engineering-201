@@ -116,6 +116,7 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 | 7b | [06c-ansible-automation-platform](06c-ansible-automation-platform.md) | Optional AAP plugin (`/ansible`) |
 | 8 | [07-developer-hub-catalog](07-developer-hub-catalog.md) | Catalog, OpenAPI, Tech Radar |
 | 9 | [08-validation](08-validation.md) | Validation, e2e, troubleshooting |
+| 10 | [09-cleanup-after-demo](09-cleanup-after-demo.md) | Remove demo resources for a fresh start |
 
 ## What you will see in Developer Hub
 
@@ -144,6 +145,7 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 Workloads may be scaled to zero between sessions:
 
 ```bash
+./scripts/ensure-workshop-instances.sh
 ./scripts/repair-keycloak.sh
 ./scripts/repair-people-app.sh
 ./scripts/repair-developer-hub.sh
@@ -157,6 +159,17 @@ Workloads may be scaled to zero between sessions:
 ./scripts/configure-aap-workshop-env.sh       # recommended; see 06c-ansible-automation-platform.md
 ./scripts/create-github-oauth-app.sh --oauth-app   # CI tab Authorize GitHub
 ```
+
+## Cleanup after demo
+
+When the demo is finished and you want an empty namespace for the next run:
+
+```bash
+./scripts/cleanup-workshop.sh --dry-run
+./scripts/cleanup-workshop.sh --yes
+```
+
+See [09-cleanup-after-demo](09-cleanup-after-demo.md).
 
 ## Sample application
 
