@@ -64,11 +64,11 @@ When the tutorial completes successfully, you have:
 
 ### Sign-in accounts
 
-| System | User | Password | Notes |
-|--------|------|----------|-------|
-| People UI / API | `user` | `r3dh@t` | Role `people-crud` |
-| Developer Hub | `devhub` | `r#dh@t` | **`#` not `3`** |
-| Keycloak admin | `admin` | `r3dh@t` | Realm admin console |
+| System | User               | Password | Notes |
+|--------|--------------------|----------|-------|
+| People UI / API | `user` or `devhub` | `r3dh@t` | Role `people-crud` |
+| Developer Hub | `devhub`           | `r#dh@t` | **`#` not `3`** |
+| Keycloak admin | `admin`            | `r3dh@t` | Realm admin console |
 
 ### Sample URLs
 
