@@ -1,6 +1,9 @@
 # Platform Engineering 201
 
-Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, and a Backstage software template.
+_This originated after my Platform Engineering 101 sessions, where I got the question "nice, but how do I get started with it?". Well, let me show you._
+  
+  
+Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, optional Developer Lightspeed (OpenAI chat assistant), optional Ansible Automation Platform plugin, and a Backstage software template.
 
 ## Start here
 
@@ -42,6 +45,16 @@ Validate:
 ./scripts/setup-developer-hub-config.sh
 ./scripts/create-github-oauth-app.sh --oauth-app   # GitHub Actions CI tab
 ```
+## Cleanup after demo
+
+Remove all workshop resources for a fresh start (safe if the demo was partial):
+
+```bash
+./scripts/cleanup-workshop.sh --dry-run
+./scripts/cleanup-workshop.sh --yes
+```
+
+See [09-cleanup-after-demo.md](docs/workshop/09-cleanup-after-demo.md).
 
 ## Repository structure
 
