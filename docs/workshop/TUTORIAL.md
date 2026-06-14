@@ -105,7 +105,8 @@ git clone https://github.com/<your-org>/platform-engineering-201.git
 cd platform-engineering-201
 
 # Set your namespace (must match workshop.env later)
-export WORKSHOP_NAMESPACE=rh-ee-<your-user>-dev
+# For me, it is maarten-vandeperre-dev
+export WORKSHOP_NAMESPACE=<your-user>-dev
 
 oc login --token=<token> --server=<api-url>
 oc new-project "${WORKSHOP_NAMESPACE}" 2>/dev/null || oc project "${WORKSHOP_NAMESPACE}"
