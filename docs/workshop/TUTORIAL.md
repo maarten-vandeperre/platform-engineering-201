@@ -90,7 +90,7 @@ Catalog server:  https://workshop-catalog-server-<ns>.<router>/entities.yaml
 
 ### Goal
 
-Ensure you have an empty or reset OpenShift project before installing workshop resources.
+Ensure you have an empty or reset OpenShift project before installing workshop resources. If needed, you can reset by running the clean-up script (scripts/cleanup-workshop.sh).
 
 ### Prerequisites
 
