@@ -120,6 +120,7 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 | 8 | [07-developer-hub-catalog](07-developer-hub-catalog.md) | Catalog, OpenAPI, Tech Radar |
 | 9 | [08-validation](08-validation.md) | Validation, e2e, troubleshooting |
 | 10 | [09-cleanup-after-demo](09-cleanup-after-demo.md) | Remove demo resources for a fresh start |
+| — | [patch-branch](patch-branch.md) | Upgrade an existing install after checking out a feature branch (e.g. Lightspeed + MCP) |
 
 ## What you will see in Developer Hub
 
@@ -170,6 +171,15 @@ When the demo is finished and you want an empty namespace for the next run:
 ```
 
 See [09-cleanup-after-demo](09-cleanup-after-demo.md).
+
+## Upgrade after checking out a feature branch
+
+Already bootstrapped on the base branch and switched to e.g. Lightspeed + MCP? **Do not re-run bootstrap** — see **[patch-branch.md](patch-branch.md)**.
+
+```bash
+# Edit scripts/workshop.env (LIGHTSPEED_ENABLED, OPENAI_API_KEY, …)
+./scripts/setup-developer-hub-config.sh
+```
 
 ## Sample application
 

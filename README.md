@@ -66,6 +66,8 @@ Optional **Developer Lightspeed** (AI chat via OpenAI + MCP catalog tools — se
 
 See [Developer Lightspeed](docs/workshop/06-install-developer-hub.md#developer-lightspeed) in the workshop guide.
 
+**Already installed on the base branch?** Upgrading to Lightspeed/MCP without a full reinstall: [patch-branch.md](docs/workshop/patch-branch.md).
+
 ## Repository structure
 
 ```

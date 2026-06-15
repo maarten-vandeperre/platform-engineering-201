@@ -49,38 +49,7 @@ done
 
 require_oc
 
-deploy_name="redhat-developer-hub"
-if oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-  deploy_name="${RHDH_INSTANCE_NAME}"
-fi
-
-uses_persistent_plugins_cache() {
-  oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" -o json \
-    | jq -e '.spec.template.spec.volumes[]
-       | select(.name == "dynamic-plugins-root")
-       | .persistentVolumeClaim.claimName' >/dev/null 2>&1
-}
-
-clear_plugins_install_lock() {
-  local pod
-  pod="$(oc get pod -n "${RHDH_NAMESPACE}" -l app.kubernetes.io/name=developer-hub \
-    -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
-  if [[ -z "${pod}" ]]; then
-    echo "No Developer Hub pod found; cannot clear install lock." >&2
-    return 1
-  fi
-
-  for path in \
-    /dynamic-plugins-root/install-dynamic-plugins.lock \
-    /dynamic-plugins-root/dynamic-plugins.lock; do
-    oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c install-dynamic-plugins -- \
-      rm -f "${path}" 2>/dev/null \
-      || oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c backstage-backend -- \
-        rm -f "${path}" 2>/dev/null \
-      || true
-  done
-  echo "Cleared stale dynamic plugins install lock (if present)."
-}
+deploy_name="$(resolve_rhdh_deploy_name)"
 
 echo "Setting up Developer Hub dynamic plugins cache in ${RHDH_NAMESPACE}..."
 
@@ -92,7 +61,7 @@ if ! oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; 
 fi
 
 if [[ "${CLEAR_LOCK}" == "true" ]]; then
-  clear_plugins_install_lock || true
+  clear_dynamic_plugins_install_lock || true
 fi
 
 patch_deployment_plugins_cache() {
@@ -119,9 +88,16 @@ patch_deployment_plugins_cache() {
 }
 
 patched=false
-if uses_persistent_plugins_cache; then
+if developer_hub_uses_plugins_pvc "${deploy_name}"; then
   echo "Deployment ${deploy_name} already uses PVC dynamic-plugins-root."
 else
+  replicas="$(oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" -o jsonpath='{.spec.replicas}')"
+  if [[ -z "${replicas}" || "${replicas}" == "0" ]]; then
+    replicas=1
+  fi
+  echo "Scaling ${deploy_name} to 0 before switching dynamic-plugins-root to PVC..."
+  oc scale "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --replicas=0
+  wait_for_developer_hub_pods_gone || true
   echo "Patching ${deploy_name} to mount PVC dynamic-plugins-root..."
   patch_deployment_plugins_cache "${deploy_name}"
   patched=true
@@ -134,8 +110,7 @@ fi
 
 if [[ "${patched}" == "true" || "${FORCE_ROLLOUT}" == "true" ]]; then
   echo "Rolling out Developer Hub to pick up persistent plugins cache..."
-  oc rollout restart "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}"
-  oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout=600s
+  safe_rollout_developer_hub "${deploy_name}" 900s
 fi
 
 echo "Dynamic plugins cache enabled (PVC dynamic-plugins-root)."

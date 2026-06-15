@@ -231,18 +231,23 @@ if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1
     --overwrite
   configure_kubernetes_env redhat-developer-hub
   echo "Restarting Developer Hub to apply configuration..."
-  oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
-  for i in $(seq 1 60); do
-    ready=$(oc get pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
-    if [[ "${ready}" == "True" ]]; then
-      echo "Developer Hub pod is ready."
-      break
-    fi
-    if (( i == 60 )); then
-      echo "Warning: timed out waiting for Developer Hub pod; configuration was applied." >&2
-    fi
-    sleep 10
-  done
+  if developer_hub_uses_plugins_pvc redhat-developer-hub \
+    || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    safe_rollout_developer_hub redhat-developer-hub 600s
+  else
+    oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
+    for i in $(seq 1 60); do
+      ready=$(oc get pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+      if [[ "${ready}" == "True" ]]; then
+        echo "Developer Hub pod is ready."
+        break
+      fi
+      if (( i == 60 )); then
+        echo "Warning: timed out waiting for Developer Hub pod; configuration was applied." >&2
+      fi
+      sleep 10
+    done
+  fi
 elif oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   oc set env "deployment/${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" \
     RHDH_OIDC_CLIENT_SECRET="${RHDH_OIDC_CLIENT_SECRET}" --overwrite

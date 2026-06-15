@@ -189,15 +189,245 @@ resolve_rhdh_host() {
     || echo "redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
 }
 
+resolve_rhdh_deploy_name() {
+  if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    echo "redhat-developer-hub"
+  elif oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    echo "${RHDH_INSTANCE_NAME}"
+  else
+    echo "redhat-developer-hub"
+  fi
+}
+
+developer_hub_uses_plugins_pvc() {
+  local deploy_name="${1:-$(resolve_rhdh_deploy_name)}"
+  oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" -o json \
+    | jq -e '.spec.template.spec.volumes[]
+       | select(.name == "dynamic-plugins-root")
+       | .persistentVolumeClaim.claimName' >/dev/null 2>&1
+}
+
+clear_dynamic_plugins_install_lock() {
+  local pod
+  pod="$(oc get pod -n "${RHDH_NAMESPACE}" -l app.kubernetes.io/name=developer-hub \
+    -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null \
+    | awk '{print $1}')"
+  if [[ -n "${pod}" ]]; then
+    for path in \
+      /dynamic-plugins-root/install-dynamic-plugins.lock \
+      /dynamic-plugins-root/dynamic-plugins.lock \
+      /opt/app-root/src/dynamic-plugins-root/install-dynamic-plugins.lock \
+      /opt/app-root/src/dynamic-plugins-root/dynamic-plugins.lock; do
+      oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c install-dynamic-plugins -- \
+        rm -f "${path}" 2>/dev/null \
+        || oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c backstage-backend -- \
+          rm -f "${path}" 2>/dev/null \
+        || true
+    done
+  fi
+
+  if ! oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    echo "Cleared dynamic plugins install lock (if present)."
+    return 0
+  fi
+
+  local job_pod="workshop-plugins-lock-clear"
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=true >/dev/null 2>&1 || true
+  oc run "${job_pod}" -n "${RHDH_NAMESPACE}" --restart=Never \
+    --image=registry.redhat.io/ubi9/ubi-minimal \
+    --overrides='{"spec":{"containers":[{"name":"clear","image":"registry.redhat.io/ubi9/ubi-minimal","command":["sh","-c","rm -fv /mnt/install-dynamic-plugins.lock /mnt/dynamic-plugins.lock; echo cleared"],"volumeMounts":[{"name":"pvc","mountPath":"/mnt"}]}],"volumes":[{"name":"pvc","persistentVolumeClaim":{"claimName":"dynamic-plugins-root"}}]}}' \
+    -- sleep 30 >/dev/null
+
+  local i
+  for i in $(seq 1 30); do
+    if oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null | grep -q cleared; then
+      break
+    fi
+    sleep 2
+  done
+  oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null || true
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  echo "Cleared dynamic plugins install lock (if present)."
+}
+
+wait_for_developer_hub_pods_gone() {
+  local i count
+  for i in $(seq 1 60); do
+    count="$(oc get pod -n "${RHDH_NAMESPACE}" -l app.kubernetes.io/name=developer-hub \
+      --no-headers 2>/dev/null | wc -l | tr -d ' ')"
+    [[ "${count}" == "0" ]] && return 0
+    sleep 5
+  done
+  return 1
+}
+
+safe_rollout_developer_hub() {
+  local deploy_name="${1:-$(resolve_rhdh_deploy_name)}"
+  local timeout="${2:-900s}"
+  local replicas
+
+  replicas="$(oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" -o jsonpath='{.spec.replicas}')"
+  if [[ -z "${replicas}" || "${replicas}" == "0" ]]; then
+    replicas=1
+  fi
+
+  echo "Scaling ${deploy_name} to 0 to release dynamic-plugins PVC and avoid lock contention..."
+  oc scale "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --replicas=0
+  wait_for_developer_hub_pods_gone || oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout=300s || true
+
+  if developer_hub_uses_plugins_pvc "${deploy_name}" \
+    || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    clear_dynamic_plugins_install_lock
+  fi
+
+  echo "Scaling ${deploy_name} back to ${replicas} replica(s)..."
+  oc scale "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --replicas="${replicas}"
+  oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout="${timeout}"
+}
+
+load_mcp_token_from_cluster() {
+  local token app_config
+
+  if oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    token="$(oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" \
+      -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+    token="${token#Bearer }"
+    if [[ -n "${token}" && "${token}" != "changeme" ]]; then
+      echo "${token}"
+      return 0
+    fi
+  fi
+
+  if oc get configmap redhat-developer-hub-app-config -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    app_config="$(oc get configmap redhat-developer-hub-app-config -n "${RHDH_NAMESPACE}" \
+      -o jsonpath='{.data.app-config\.yaml}' 2>/dev/null || true)"
+  elif oc get configmap app-config-rhdh -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    app_config="$(oc get configmap app-config-rhdh -n "${RHDH_NAMESPACE}" \
+      -o jsonpath='{.data.app-config-rhdh\.yaml}' 2>/dev/null || true)"
+  fi
+
+  if [[ -n "${app_config}" ]]; then
+    token="$(python3 - "${app_config}" <<'PY'
+import sys, yaml
+config = yaml.safe_load(sys.argv[1]) or {}
+for entry in config.get("backend", {}).get("auth", {}).get("externalAccess", []) or []:
+    if entry.get("type") != "static":
+        continue
+    options = entry.get("options") or {}
+    if options.get("subject") == "mcp-clients" and options.get("token"):
+        print(options["token"])
+        break
+PY
+)"
+    if [[ -n "${token}" && "${token}" != "changeme" ]]; then
+      echo "${token}"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 ensure_mcp_token() {
   if [[ -n "${MCP_TOKEN:-}" && "${MCP_TOKEN}" != "changeme" ]]; then
     export MCP_TOKEN
     return 0
   fi
+
+  if MCP_TOKEN="$(load_mcp_token_from_cluster)"; then
+    export MCP_TOKEN
+    echo "Using existing MCP_TOKEN from cluster (add to scripts/workshop.env to keep it stable across re-runs):"
+    echo "  export MCP_TOKEN=\"${MCP_TOKEN}\""
+    return 0
+  fi
+
   MCP_TOKEN="$(openssl rand -base64 24 | tr -d '\n/+= ' | head -c 32)"
   export MCP_TOKEN
   echo "Generated MCP_TOKEN (add to scripts/workshop.env to keep it stable across re-runs):"
   echo "  export MCP_TOKEN=\"${MCP_TOKEN}\""
+}
+
+sync_mcp_token_in_app_config() {
+  ensure_mcp_token
+
+  render_manifest "${MANIFESTS_DIR}/developer-hub/lightspeed-mcp-token-secret.yaml" | oc apply -f -
+
+  local cm_key cm_name tmp merged
+  if oc get configmap redhat-developer-hub-app-config -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    cm_name="redhat-developer-hub-app-config"
+    cm_key="app-config.yaml"
+  elif oc get configmap app-config-rhdh -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    cm_name="app-config-rhdh"
+    cm_key="app-config-rhdh.yaml"
+  else
+    echo "Developer Hub app-config ConfigMap not found; MCP secret applied only." >&2
+    return 0
+  fi
+
+  tmp="$(mktemp)"
+  oc get configmap "${cm_name}" -n "${RHDH_NAMESPACE}" -o json \
+    | jq -r --arg key "${cm_key}" '.data[$key]' >"${tmp}"
+
+  local sync_status=0
+  python3 - "${tmp}" "${MCP_TOKEN}" <<'PY' || sync_status=$?
+import sys, yaml
+
+path, token = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as handle:
+    config = yaml.safe_load(handle) or {}
+
+external = config.setdefault("backend", {}).setdefault("auth", {}).setdefault("externalAccess", [])
+updated = False
+for entry in external:
+    if entry.get("type") != "static":
+        continue
+    options = entry.setdefault("options", {})
+    if options.get("subject") == "mcp-clients":
+        if options.get("token") != token:
+            options["token"] = token
+            updated = True
+        break
+else:
+    external.append(
+        {
+            "type": "static",
+            "options": {"token": token, "subject": "mcp-clients"},
+        }
+    )
+    updated = True
+
+lightspeed = config.setdefault("lightspeed", {})
+servers = lightspeed.setdefault("mcpServers", [])
+for server in servers:
+    if server.get("name") == "mcp::backstage":
+        bearer = f"Bearer {token}"
+        if server.get("token") != bearer:
+            server["token"] = bearer
+            updated = True
+        break
+else:
+    servers.append({"name": "mcp::backstage", "token": f"Bearer {token}"})
+    updated = True
+
+if not updated:
+    sys.exit(2)
+
+with open(path, "w", encoding="utf-8") as handle:
+    yaml.dump(config, handle, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PY
+
+  if [[ "${sync_status}" -eq 0 ]]; then
+    oc create configmap "${cm_name}" -n "${RHDH_NAMESPACE}" \
+      --from-file="${cm_key}=${tmp}" \
+      --dry-run=client -o yaml | oc apply -f -
+    echo "Synced MCP token in ${cm_name}."
+  elif [[ "${sync_status}" -eq 2 ]]; then
+    echo "MCP token already synced in ${cm_name}."
+  else
+    rm -f "${tmp}"
+    return 1
+  fi
+  rm -f "${tmp}"
 }
 
 merge_mcp_into_app_config() {
