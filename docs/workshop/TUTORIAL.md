@@ -299,11 +299,12 @@ https://redhat-developer-hub-<namespace>.<router>/api/auth/github/handler/frame
 
 ---
 
-## Module 3 — One-command bootstrap
+## Module 3 — One-command bootstrap (or break down into separate steps)
 
 ### Goal
 
 Install the entire stack with one script (recommended after Modules 0–1; Module 2 credentials in `workshop.env` are applied automatically during bootstrap).
+Run the commands one-by-one if you want to see what's happening, what's required for the Backstage setup.
 
 ### Commands
 
