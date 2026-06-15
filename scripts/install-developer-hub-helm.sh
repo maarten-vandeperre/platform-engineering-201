@@ -24,6 +24,8 @@ export CLUSTER_ROUTER_BASE RHDH_APP_TITLE WORKSHOP_GIT_REPO WORKSHOP_GIT_BRANCH 
 
 echo "Installing Red Hat Developer Hub via Helm into ${RHDH_NAMESPACE}..."
 
+helm_unlock_release redhat-developer-hub "${RHDH_NAMESPACE}"
+
 oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
   --from-literal=ARGOCD_URL="${ARGOCD_URL}" \
   --from-literal=ARGOCD_TOKEN="${ARGOCD_TOKEN}" \

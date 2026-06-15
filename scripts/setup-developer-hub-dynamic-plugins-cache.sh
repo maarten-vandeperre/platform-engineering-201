@@ -50,13 +50,8 @@ done
 require_oc
 
 deploy_name="redhat-developer-hub"
-if ! oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-  if oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-    deploy_name="${RHDH_INSTANCE_NAME}"
-  else
-    echo "Developer Hub deployment not found in ${RHDH_NAMESPACE}; skipping plugins cache setup."
-    exit 0
-  fi
+if oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+  deploy_name="${RHDH_INSTANCE_NAME}"
 fi
 
 uses_persistent_plugins_cache() {
@@ -90,6 +85,11 @@ clear_plugins_install_lock() {
 echo "Setting up Developer Hub dynamic plugins cache in ${RHDH_NAMESPACE}..."
 
 render_manifest "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-pvc.yaml" | oc apply -f -
+
+if ! oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+  echo "Developer Hub deployment not found in ${RHDH_NAMESPACE}; PVC created — run again after Helm install."
+  exit 0
+fi
 
 if [[ "${CLEAR_LOCK}" == "true" ]]; then
   clear_plugins_install_lock || true

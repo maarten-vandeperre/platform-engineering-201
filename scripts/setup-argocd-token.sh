@@ -42,18 +42,14 @@ if [[ -z "${ADMIN_PASS}" ]]; then
 fi
 
 TOKEN=""
-if command -v argocd >/dev/null 2>&1; then
-  argocd login "${ARGOCD_HOST}" --username admin --password "${ADMIN_PASS}" --insecure --grpc-web
-  TOKEN=$(argocd account generate-token --account rhdh 2>/dev/null || argocd account generate-token --account admin)
-else
-  SESSION=$(curl -sk -X POST "${ARGOCD_URL}/api/v1/session" \
-    -H 'Content-Type: application/json' \
-    -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PASS}\"}" | jq -r '.token // empty')
-  if [[ -n "${SESSION}" && "${SESSION}" != "null" ]]; then
-    TOKEN=$(curl -sk -X POST "${ARGOCD_URL}/api/v1/account/rhdh/token" \
-      -H "Authorization: Bearer ${SESSION}" | jq -r '.token // empty')
-    [[ -z "${TOKEN}" || "${TOKEN}" == "null" ]] && TOKEN="${SESSION}"
-  fi
+# Use HTTP API only — avoids interactive `argocd login` prompts when the CLI is installed.
+SESSION=$(curl -sk -X POST "${ARGOCD_URL}/api/v1/session" \
+  -H 'Content-Type: application/json' \
+  -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PASS}\"}" | jq -r '.token // empty')
+if [[ -n "${SESSION}" && "${SESSION}" != "null" ]]; then
+  TOKEN=$(curl -sk -X POST "${ARGOCD_URL}/api/v1/account/rhdh/token" \
+    -H "Authorization: Bearer ${SESSION}" | jq -r '.token // empty')
+  [[ -z "${TOKEN}" || "${TOKEN}" == "null" ]] && TOKEN="${SESSION}"
 fi
 
 if [[ -z "${TOKEN}" || "${TOKEN}" == "null" ]]; then

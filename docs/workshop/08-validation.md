@@ -55,7 +55,7 @@ E2E_HEADLESS=false ./e2e/run-e2e.sh
 ### OpenShift resources
 
 ```bash
-oc get all,route,pvc -n $WORKSHOP_NAMESPACE -l app.kubernetes.io/part-of=people-service
+oc get deploy,svc,route,pvc,pod -n $WORKSHOP_NAMESPACE -l app.kubernetes.io/part-of=people-service
 oc get deploy,pod -n $WORKSHOP_NAMESPACE -l app=keycloak
 oc get deploy,pod -n $WORKSHOP_NAMESPACE -l app=workshop-catalog-server
 ```
@@ -113,6 +113,8 @@ REPAIR_RESET_POSTGRES_DATA=true ./scripts/repair-people-app.sh
 | Symptom | Fix |
 |---------|-----|
 | Bootstrap fails on operators | Use `WORKSHOP_INSTALL_METHOD=helm` or ask admin to install operators |
+| Helm `another operation is in progress` | Re-run `./scripts/install-developer-hub-helm.sh` (auto-unlocks), or `helm rollback redhat-developer-hub <rev> -n $WORKSHOP_NAMESPACE` |
+| Helm `connection refused` / `unexpected EOF` during `--wait` | API blip or sandbox idle — `oc login` again, then resume with `./scripts/install-developer-hub-helm.sh` |
 | Keycloak login popup shows OpenShift 503 | `./scripts/ensure-workshop-platform.sh` |
 | Backend `CrashLoopBackOff` | `./scripts/repair-people-app.sh` — check postgres logs |
 | Frontend `${KEYCLOAK_URL}` placeholders / 414 login URL | `./scripts/repair-people-app.sh` (rebuilds frontend, applies runtime ConfigMap) |
@@ -130,7 +132,7 @@ REPAIR_RESET_POSTGRES_DATA=true ./scripts/repair-people-app.sh
 | Lost OAuth client secret | Regenerate in GitHub app settings, update `workshop.env`, run `./scripts/setup-github-auth.sh --oauth-only` |
 | Developer Hub login 500 (`ECONNREFUSED :5432`) | `./scripts/repair-developer-hub.sh` |
 | Catalog entity missing | `./scripts/configure-developer-hub-catalog.sh` |
-| API listing empty | Ensure catalog server is running (`oc get deploy workshop-catalog-server`) |
+| Catalog server `ProgressDeadlineExceeded` / `ReplicaFailure` | Fixed in manifest (removed hardcoded `runAsUser`); run `./scripts/configure-developer-hub-catalog.sh` |
 | API returns 401/403 | Obtain Keycloak token; user must have `people-crud` role |
 | Wrong cluster URLs | Set `CLUSTER_ROUTER_BASE` in `workshop.env` and re-run config scripts |
 | No Lightspeed chat button | `LIGHTSPEED_ENABLED=true`, valid `OPENAI_API_KEY`, `./scripts/setup-developer-hub-lightspeed.sh` |

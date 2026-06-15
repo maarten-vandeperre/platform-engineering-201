@@ -25,6 +25,7 @@ replay_pid*
 
 # Workshop local config (may contain tokens)
 scripts/workshop.env
+scripts/workshop-redhat.env
 
 # Java / Node
 **/target/

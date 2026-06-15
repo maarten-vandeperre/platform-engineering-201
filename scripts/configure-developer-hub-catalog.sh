@@ -8,7 +8,8 @@ source "${SCRIPT_DIR}/lib/common.sh"
 echo "Updating Developer Hub catalog entities in ${WORKSHOP_NAMESPACE}..."
 
 require_oc
-ensure_workshop_platform
+ensure_keycloak_running
+ensure_rhdh_postgres
 
 if [[ -z "${KEYCLOAK_URL:-}" ]] && oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
   KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")

@@ -1,6 +1,11 @@
 # Platform Engineering 201
 
-Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, optional **Developer Lightspeed** (OpenAI chat assistant), and a Backstage software template.
+_This originated after my Platform Engineering 101 sessions, where I got the question "nice, but how do I get started with it?". Well, let me show you._
+  
+  
+Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, optional Developer Lightspeed (OpenAI chat assistant), optional Ansible Automation Platform plugin, and a Backstage software template.
+
+**Backstage note:** RHDH is Red Hat’s distribution of Backstage. The catalog, plugins, scaffolder, and app-config patterns in this repo apply to **Community Backstage** as well. This workshop is tested on OpenShift (`oc`); on vanilla Kubernetes you can follow the same ideas with `kubectl` and your own ingress/Helm install — see [Developer Hub and Backstage](docs/workshop/TUTORIAL.md#developer-hub-and-backstage) in the tutorial.
 
 ## Start here
 
@@ -18,10 +23,10 @@ chmod +x scripts/*.sh scripts/lib/*.sh
 ./scripts/bootstrap-workshop.sh
 ```
 
-Helm instead of operators:
+Default install uses **Helm** (`WORKSHOP_INSTALL_METHOD=helm` in `workshop.env.example`) — no OperatorHub subscriptions. For the operator path:
 
 ```bash
-export WORKSHOP_INSTALL_METHOD=helm
+export WORKSHOP_INSTALL_METHOD=operator
 ./scripts/bootstrap-workshop.sh
 ```
 
@@ -42,6 +47,16 @@ Validate:
 ./scripts/setup-developer-hub-config.sh
 ./scripts/create-github-oauth-app.sh --oauth-app   # GitHub Actions CI tab
 ```
+## Cleanup after demo
+
+Remove all workshop resources for a fresh start (safe if the demo was partial):
+
+```bash
+./scripts/cleanup-workshop.sh --dry-run
+./scripts/cleanup-workshop.sh --yes
+```
+
+See [09-cleanup-after-demo.md](docs/workshop/09-cleanup-after-demo.md).
 
 Optional **Developer Lightspeed** (AI chat via OpenAI + MCP catalog tools — set `LIGHTSPEED_ENABLED=true` and `OPENAI_API_KEY` in `workshop.env`):
 

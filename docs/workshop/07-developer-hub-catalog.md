@@ -363,10 +363,9 @@ Catalog entities live under `manifests/gitops/catalog/entities/`. The **organiza
 
 ## Customize for your fork
 
-1. `manifests/gitops/catalog/entities/people-service.yaml` — GitHub slug and links
-2. `manifests/gitops/catalog/entities/people-api.yaml` — GitHub slug for API CI tab
-3. `scripts/workshop.env` — git repo URL, namespace, `CLUSTER_ROUTER_BASE`, `GITHUB_TOKEN`
-4. Re-run `./scripts/configure-developer-hub-catalog.sh` and `./scripts/setup-developer-hub-config.sh`
+1. `scripts/workshop.env` — `WORKSHOP_GIT_REPO`, `WORKSHOP_GITHUB_ORG`, `WORKSHOP_GITHUB_REPO`, `WORKSHOP_GIT_BRANCH`, namespace, `CLUSTER_ROUTER_BASE`, `GITHUB_TOKEN`
+2. Optional: edit catalog content in `manifests/gitops/developer-hub/catalog-configmap.yaml` (titles, tags, links — GitHub URLs use `${WORKSHOP_GITHUB_*}` placeholders)
+3. Re-run `./scripts/configure-developer-hub-catalog.sh` and `./scripts/setup-developer-hub-config.sh`
 
 ## Egyptian theme branding
 

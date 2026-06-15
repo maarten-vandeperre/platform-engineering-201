@@ -1,8 +1,24 @@
 # Platform Engineering 201 — Complete Tutorial
+_I've tested the commands on a MacBook._
 
 End-to-end guide from a **clean OpenShift sandbox** to the **full workshop state**: People CRUD app, Keycloak, GitOps, Red Hat Developer Hub with catalog, TechDocs, Tech Radar, Learning Paths, GitHub integrations, Orchestrator workflow, optional **Developer Lightspeed** (OpenAI chat assistant), Egyptian theme, and organization entity model.
 
 Use this document as the **single tutorial outline**. Each step lists commands, what happens, why it matters, trade-offs, verification, and **exact files to edit** when customizing.
+
+## Developer Hub and Backstage
+
+This workshop is a **Backstage workshop** at heart: catalog entities, TechDocs, Tech Radar, scaffolder templates, dynamic plugins, Kubernetes/Topology, GitHub integrations, and Orchestrator are all standard Backstage concepts.
+
+We use **Red Hat Developer Hub** (RHDH) because this is a Red Hat workshop — RHDH is Red Hat’s supported distribution of [Backstage](https://backstage.io/). The app-config, catalog YAML, and plugin patterns you configure here transfer directly to **Community Backstage**.
+
+| This tutorial | Community Backstage on vanilla Kubernetes |
+|---------------|-------------------------------------------|
+| OpenShift + `oc` | Kubernetes + `kubectl` (same resources; Routes become Ingresses or port-forwards) |
+| RHDH Helm chart or RHDH operator | [Backstage Helm chart](https://backstage.io/docs/deployment/helm) or your own manifests |
+| OpenShift Routes | Ingress, Gateway API, or `kubectl port-forward` |
+| Red Hat–branded dynamic plugins | Most plugins are open source; check each plugin’s install docs |
+
+The scripts and manifests target OpenShift and are tested there. On plain Kubernetes you can reuse the **People app**, **Keycloak**, **catalog entities**, and **app-config** ideas; expect to adapt install scripts, ingress, and image pulls yourself. Treat `oc` in the commands as `kubectl` where the resource types match.
 
 ---
 
@@ -65,15 +81,16 @@ When the tutorial completes successfully, you have:
 
 ### Sign-in accounts
 
-| System | User | Password | Notes |
-|--------|------|----------|-------|
-| People UI / API | `user` | `r3dh@t` | Role `people-crud` |
-| Developer Hub | `devhub` | `r#dh@t` | **`#` not `3`** |
-| Keycloak admin | `admin` | `r3dh@t` | Realm admin console |
+| System | User               | Password | Notes |
+|--------|--------------------|----------|-------|
+| People UI / API | `user` or `devhub` | `r3dh@t` | Role `people-crud` |
+| Developer Hub | `devhub`           | `r#dh@t` | **`#` not `3`** |
+| Keycloak admin | `admin`            | `r3dh@t` | Realm admin console |
 
 ### Sample URLs
 
-Replace `<ns>` and `<router>` with your namespace and cluster router base:
+Replace `<ns>` and `<router>` with your namespace and cluster router base:  
+_For me, with my [developers.redhat.com](https://developers.redhat.com) cluster, it is 'https://console-openshift-console.apps.rm2.thpm.p1.openshiftapps.com/'_
 
 ```text
 People UI:       https://people-frontend-<ns>.<router>/
@@ -90,11 +107,11 @@ Catalog server:  https://workshop-catalog-server-<ns>.<router>/entities.yaml
 
 ### Goal
 
-Ensure you have an empty or reset OpenShift project before installing workshop resources.
+Ensure you have an empty or reset OpenShift project before installing workshop resources. If needed, you can reset by running the clean-up script (scripts/cleanup-workshop.sh).
 
 ### Prerequisites
 
-- OpenShift 4.x sandbox or dedicated namespace
+- OpenShift 4.x sandbox or dedicated namespace (you can get one for free at [developers.redhat.com](https://developers.redhat.com))
 - `oc` logged in with permission to create Deployments, Routes, PVCs, BuildConfigs, Subscriptions (or Helm)
 
 ### Commands
@@ -105,22 +122,22 @@ git clone https://github.com/<your-org>/platform-engineering-201.git
 cd platform-engineering-201
 
 # Set your namespace (must match workshop.env later)
-export WORKSHOP_NAMESPACE=rh-ee-<your-user>-dev
+# For me, it is maarten-vandeperre-dev
+export WORKSHOP_NAMESPACE=<your-user>-dev
 
 oc login --token=<token> --server=<api-url>
 oc new-project "${WORKSHOP_NAMESPACE}" 2>/dev/null || oc project "${WORKSHOP_NAMESPACE}"
 
-# Optional: remove prior workshop resources (destructive)
-oc delete application people-service -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
-oc delete argocd workshop-gitops -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
-oc delete backstage developer-hub -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
-oc delete deployment,svc,route,bc,is,pvc,secret -l app.kubernetes.io/part-of=people-service -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
-oc delete deploy,svc,route keycloak workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" --ignore-not-found
+# Optional: remove prior workshop resources (destructive; safe if demo was partial)
+./scripts/cleanup-workshop.sh --dry-run
+./scripts/cleanup-workshop.sh --yes
 ```
+
+See [09-cleanup-after-demo.md](09-cleanup-after-demo.md).
 
 ### What happens
 
-OpenShift project is selected. Optional cleanup removes People app, Keycloak, catalog server, Argo CD Application, and Developer Hub CR leftovers.
+OpenShift project is selected. Optional cleanup removes People app, Keycloak, catalog server, Argo CD, Developer Hub, orchestrator, and related workshop resources via [`cleanup-workshop.sh`](../../scripts/cleanup-workshop.sh).
 
 ### Why
 
@@ -143,7 +160,8 @@ Shared sandboxes often contain half-finished installs. Starting clean avoids dup
 
 ```bash
 oc project
-oc get all -n "${WORKSHOP_NAMESPACE}"   # should be empty or only unrelated resources
+# Avoid `oc get all` — some sandboxes forbid listing applications.app.k8s.io
+oc get deploy,statefulset,svc,route,pvc,buildconfig,imagestream,pod -n "${WORKSHOP_NAMESPACE}"
 ```
 
 ---
@@ -166,11 +184,20 @@ cp scripts/workshop.env.example scripts/workshop.env
 
 ### What happens
 
-`workshop.env` becomes the single source of truth for all scripts via [`scripts/lib/common.sh`](../../scripts/lib/common.sh).
+You create a **local** `scripts/workshop.env` (gitignored) from [`scripts/workshop.env.example`](../../scripts/workshop.env.example). That file holds every value that differs per person or cluster: namespace, GitHub fork, router domain, passwords, install method, and optional integrations (GitHub PAT, Argo CD, AAP, Lightspeed).
+
+Every workshop script starts by sourcing [`scripts/lib/common.sh`](../../scripts/lib/common.sh). That library:
+
+1. **Loads** `scripts/workshop.env` if it exists, otherwise falls back to `workshop.env.example`.
+2. **Exports** the variables (for example `WORKSHOP_NAMESPACE`, `CLUSTER_ROUTER_BASE`, `KEYCLOAK_*`, `RHDH_*`) so child scripts and `envsubst` see the same values.
+3. **Renders** manifests from `manifests/gitops/` via `render_manifest()`: placeholders like `${WORKSHOP_NAMESPACE}` in YAML are replaced with your values before `oc apply`.
+4. **Auto-detects** `CLUSTER_ROUTER_BASE` from the OpenShift console route during bootstrap when you leave the example default.
+
+So you edit one file; bootstrap, deploy, repair, cleanup, and validation scripts all read the same configuration without duplicating secrets or namespace names in Git.
 
 ### Why
 
-Manifests use `${WORKSHOP_NAMESPACE}` placeholders rendered with `envsubst` — no hard-coded cluster values in Git.
+Manifests stay generic in the repository (`namespace: ${WORKSHOP_NAMESPACE}`) while your fork and sandbox stay private in `workshop.env`. That pattern keeps the repo shareable, makes re-runs predictable, and lets you change namespace or credentials once instead of hunting through dozens of YAML files.
 
 ### Pros and cons
 
@@ -183,10 +210,22 @@ Manifests use `${WORKSHOP_NAMESPACE}` placeholders rendered with `envsubst` — 
 
 | Setting | File |
 |---------|------|
-| All workshop variables | [`scripts/workshop.env`](../../scripts/workshop.env) (from [`.example`](../../scripts/workshop.env.example)) |
-| GitHub slug on catalog entities | [`manifests/gitops/catalog/entities/people-service.yaml`](../../manifests/gitops/catalog/entities/people-service.yaml) |
-| GitHub slug on API entity | [`manifests/gitops/catalog/entities/people-api.yaml`](../../manifests/gitops/catalog/entities/people-api.yaml) |
-| Inline catalog copy (ConfigMap) | [`manifests/gitops/developer-hub/catalog-configmap.yaml`](../../manifests/gitops/developer-hub/catalog-configmap.yaml) |
+| All workshop variables (namespace, GitHub fork, router, credentials) | [`scripts/workshop.env`](../../scripts/workshop.env) (from [`.example`](../../scripts/workshop.env.example)) |
+| GitHub org/repo for catalog CI, source links, and scaffolder | `WORKSHOP_GITHUB_ORG`, `WORKSHOP_GITHUB_REPO`, `WORKSHOP_GIT_REPO`, `WORKSHOP_GIT_BRANCH` in `workshop.env` — substituted into manifests at deploy time |
+| Catalog entity content (titles, tags, extra links, templates) | [`manifests/gitops/developer-hub/catalog-configmap.yaml`](../../manifests/gitops/developer-hub/catalog-configmap.yaml) — re-run [`configure-developer-hub-catalog.sh`](../../scripts/configure-developer-hub-catalog.sh) after edits |
+
+The files under `manifests/gitops/catalog/entities/` (`people-service.yaml`, `people-api.yaml`) use the same `${WORKSHOP_GITHUB_ORG}` / `${WORKSHOP_GITHUB_REPO}` placeholders; you do **not** edit them to point at your fork. Set your fork in `workshop.env` instead.
+
+**Important!!!**   
+Do not forget to review the workshop.env properties, with main focus on:
+* CLUSTER_ROUTER_BASE
+* WORKSHOP_NAMESPACE
+* WORKSHOP_GIT_REPO
+* WORKSHOP_GITHUB_ORG
+* WORKSHOP_GITHUB_REPO
+
+  
+_If you don't use Ansible (later stage), you can entirely skip AAP_* and RH_REGISTRY_* properties._
 
 See [02-configuration.md](02-configuration.md) for the full variable table.
 
@@ -205,7 +244,30 @@ echo "Namespace: ${WORKSHOP_NAMESPACE}, Router: ${CLUSTER_ROUTER_BASE}"
 
 Enable Developer Hub **CI**, **Issues**, and **Pull Requests** tabs plus scaffolder publish.
 
+### When to run this module
+
+Developer Hub must exist before credentials can be **pushed to the cluster**. You have two valid paths:
+
+| Path | When | Commands |
+|------|------|----------|
+| **A — credentials before bootstrap** (recommended) | After Module 1, **before** Module 3 | Save tokens to `workshop.env` only (`--no-apply`). Bootstrap (Module 3) applies them via `setup-developer-hub-config.sh`. |
+| **B — credentials after bootstrap** | After Module 3 (or Module 9) | Run `./scripts/setup-github-auth.sh` with no flags — applies to a live Developer Hub. |
+
+If you run `./scripts/setup-github-auth.sh` **without** `--no-apply` before bootstrap, it fails: Keycloak and Developer Hub are not installed yet (empty namespace).
+
 ### Commands
+
+**Path A — before bootstrap** (save to `workshop.env` only):
+
+```bash
+./scripts/create-github-oauth-app.sh --oauth-app --no-apply
+./scripts/setup-github-auth.sh --open-pat-url --no-apply
+
+# Then continue to Module 3:
+./scripts/bootstrap-workshop.sh
+```
+
+**Path B — after bootstrap**:
 
 ```bash
 # OAuth App + PAT (recommended — interactive PAT prompt)
@@ -221,8 +283,10 @@ GITHUB_TOKEN=ghp_... ./scripts/setup-github-auth.sh --pat-only --no-interactive
 
 ### What happens
 
-- `GITHUB_TOKEN` → Secret `rhdh-workshop-secrets` (GitHub proxy, scaffolder)
-- OAuth client ID/secret → Developer Hub `auth.providers.github` in app-config
+- **With `--no-apply`:** only `scripts/workshop.env` is updated (`GITHUB_TOKEN`, OAuth client ID/secret).
+- **Without `--no-apply` (after bootstrap):** same env file updates, plus:
+  - `GITHUB_TOKEN` → Secret `rhdh-workshop-secrets` (GitHub proxy, scaffolder)
+  - OAuth client ID/secret → Developer Hub `auth.providers.github` in app-config
 
 ### Why
 
@@ -252,11 +316,12 @@ https://redhat-developer-hub-<namespace>.<router>/api/auth/github/handler/frame
 
 ---
 
-## Module 3 — One-command bootstrap
+## Module 3 — One-command bootstrap (or break down into separate steps)
 
 ### Goal
 
-Install the entire stack with one script (recommended after Modules 0–1).
+Install the entire stack with one script (recommended after Modules 0–1; Module 2 credentials in `workshop.env` are applied automatically during bootstrap).
+Run the commands one-by-one if you want to see what's happening, what's required for the Backstage setup.
 
 ### Commands
 
@@ -264,18 +329,33 @@ Install the entire stack with one script (recommended after Modules 0–1).
 chmod +x scripts/*.sh scripts/lib/*.sh
 source scripts/workshop.env
 
-# Default: operators + full stack
+# Default in workshop.env.example: WORKSHOP_INSTALL_METHOD=helm (no OperatorHub subscriptions)
 ./scripts/bootstrap-workshop.sh
 
-# Alternatives:
-# export WORKSHOP_INSTALL_METHOD=helm    # no OperatorHub subscriptions
-# export SKIP_ARGOCD=true                # skip GitOps / CD tab
-# export RUN_E2E=true                    # run Selenium tests at end
+# Alternatives (set in workshop.env or export before bootstrap):
+# export SKIP_ARGOCD=false                  # opt in to Argo CD Helm + GitOps CD tab
+# export WORKSHOP_INSTALL_METHOD=operator   # OpenShift GitOps + RHDH operators (Module 4)
+# export RUN_E2E=true                       # run Selenium tests at end
 ```
 
 ### What happens
 
-[`scripts/bootstrap-workshop.sh`](../../scripts/bootstrap-workshop.sh) runs this sequence:
+[`scripts/bootstrap-workshop.sh`](../../scripts/bootstrap-workshop.sh) reads `WORKSHOP_INSTALL_METHOD` from `workshop.env`. **Helm** is the default for shared OpenShift sandboxes; **operator** is the supported Red Hat path when you have Subscription access.
+
+**Helm path** (`WORKSHOP_INSTALL_METHOD=helm` — default). **Argo CD is skipped** unless you set `SKIP_ARGOCD=false` in `workshop.env` (opt-in for the GitOps CD tab; needs CRD permission on many clusters):
+
+| Order | Script | Module |
+|------:|--------|--------|
+| 1 | `setup-keycloak.sh` | [5](#module-5--keycloak-identity) |
+| 2 | `deploy-people-app.sh` | [7](#module-7--people-service-application) |
+| 3 | `install-developer-hub-helm.sh` | [8](#module-8--red-hat-developer-hub), [03b](03b-install-with-helm.md) |
+| 4 | (optional) `install-argocd-helm.sh` | [6](#module-6--argocd-gitops) — only if `SKIP_ARGOCD=false` |
+| 5 | (optional) `setup-argocd-token.sh` | [6](#module-6--argocd-gitops) |
+| 6–13 | config, catalog, orchestrator, validate | [9](#module-9--developer-hub-configuration)–[12](#module-12--validation--repair) |
+
+Skip [Module 4](#module-4--install-platform-operators) on the Helm path — Argo CD and Developer Hub install from Helm charts instead of operators.
+
+**Operator path** (`WORKSHOP_INSTALL_METHOD=operator`):
 
 | Order | Script | Module |
 |------:|--------|--------|
@@ -285,13 +365,7 @@ source scripts/workshop.env
 | 4 | `deploy-people-app.sh` | [7](#module-7--people-service-application) |
 | 5 | `install-developer-hub.sh` | [8](#module-8--red-hat-developer-hub) |
 | 6 | `setup-argocd-token.sh` | [6](#module-6--argocd-gitops) |
-| 7 | `setup-developer-hub-kubernetes.sh` | [9](#module-9--developer-hub-configuration) |
-| 8 | `setup-developer-hub-config.sh` | [9](#module-9--developer-hub-configuration) |
-| 9 | `configure-developer-hub-catalog.sh` | [10](#module-10--catalog-integrations--theme) |
-| 10 | `setup-developer-hub-techdocs.sh` | [10](#module-10--catalog-integrations--theme) |
-| 11 | `setup-orchestrator.sh` | [11](#module-11--orchestrator-workflow) |
-| 12 | `ensure-workshop-platform.sh` | [12](#module-12--validation--repair) |
-| 13 | `validate-workshop.sh` | [12](#module-12--validation--repair) |
+| 7–13 | config, catalog, orchestrator, validate | [9](#module-9--developer-hub-configuration)–[12](#module-12--validation--repair) |
 
 ### Why
 
@@ -312,9 +386,11 @@ See [Module 12](#module-12--validation--repair).
 
 ## Module 4 — Install platform operators
 
+> **Helm path:** If `WORKSHOP_INSTALL_METHOD=helm` in `workshop.env` (the default), **skip this module**. Bootstrap installs Argo CD and Developer Hub with Helm instead — see [03b-install-with-helm.md](03b-install-with-helm.md) and the Helm table in [Module 3](#module-3--one-command-bootstrap-or-break-down-into-separate-steps).
+
 ### Goal
 
-Install **OpenShift GitOps** and **Red Hat Developer Hub** operators in your namespace.
+Install **OpenShift GitOps** and **Red Hat Developer Hub** operators in your namespace (`WORKSHOP_INSTALL_METHOD=operator` only).
 
 ### Commands
 
@@ -343,7 +419,7 @@ Operators install CRDs and controllers for `ArgoCD` and `Backstage` custom resou
 | Supported Red Hat path | Needs Subscription permission in namespace |
 | CR-based lifecycle | Slower first install (CSV rollout) |
 
-**Alternative:** [03b-install-with-helm.md](03b-install-with-helm.md) — `WORKSHOP_INSTALL_METHOD=helm`, no subscriptions.
+**Helm alternative (default for most sandboxes):** [03b-install-with-helm.md](03b-install-with-helm.md) — set `WORKSHOP_INSTALL_METHOD=helm` in `workshop.env`; no subscriptions or Module 4.
 
 ### Customize
 
@@ -834,6 +910,18 @@ Confirm the tutorial end state and recover from common sandbox issues.
 
 Full table: [08-validation.md](08-validation.md)
 
+### Cleanup after demo
+
+When the demo is finished and you want an empty namespace for the next run:
+
+```bash
+./scripts/cleanup-workshop.sh --dry-run
+./scripts/cleanup-workshop.sh --yes
+./scripts/bootstrap-workshop.sh
+```
+
+See [09-cleanup-after-demo.md](09-cleanup-after-demo.md).
+
 ---
 
 ## Configuration reference (all customizable files)
@@ -848,6 +936,7 @@ Use this index when you need to change one concern without reading the whole tut
 | [`scripts/workshop.env.example`](../../scripts/workshop.env.example) | Template with defaults |
 | [`scripts/lib/common.sh`](../../scripts/lib/common.sh) | Shared helpers, `envsubst`, `render_manifest` |
 | [`scripts/bootstrap-workshop.sh`](../../scripts/bootstrap-workshop.sh) | Full install orchestration |
+| [`scripts/cleanup-workshop.sh`](../../scripts/cleanup-workshop.sh) | Remove demo resources for a fresh start |
 
 ### People application
 

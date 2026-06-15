@@ -18,6 +18,8 @@ export ARGOCD_ROUTE_HOST ARGOCD_ADMIN_PASSWORD ARGOCD_INSTALL_CRDS
 
 echo "Installing Argo CD via Helm into ${GITOPS_NAMESPACE}..."
 
+helm_unlock_release argocd "${GITOPS_NAMESPACE}"
+
 helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
 helm repo update argo >/dev/null
 
