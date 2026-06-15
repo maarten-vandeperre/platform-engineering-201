@@ -143,7 +143,8 @@ Shared sandboxes often contain half-finished installs. Starting clean avoids dup
 
 ```bash
 oc project
-oc get all -n "${WORKSHOP_NAMESPACE}"   # should be empty or only unrelated resources
+# Avoid `oc get all` — some sandboxes forbid listing applications.app.k8s.io
+oc get deploy,statefulset,svc,route,pvc,buildconfig,imagestream,pod -n "${WORKSHOP_NAMESPACE}"
 ```
 
 ---

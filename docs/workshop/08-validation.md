@@ -55,7 +55,7 @@ E2E_HEADLESS=false ./e2e/run-e2e.sh
 ### OpenShift resources
 
 ```bash
-oc get all,route,pvc -n $WORKSHOP_NAMESPACE -l app.kubernetes.io/part-of=people-service
+oc get deploy,svc,route,pvc,pod -n $WORKSHOP_NAMESPACE -l app.kubernetes.io/part-of=people-service
 oc get deploy,pod -n $WORKSHOP_NAMESPACE -l app=keycloak
 oc get deploy,pod -n $WORKSHOP_NAMESPACE -l app=workshop-catalog-server
 ```
