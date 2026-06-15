@@ -2,6 +2,8 @@
 
 This workshop installs **Red Hat Developer Hub** on OpenShift, deploys a sample **Quarkus + PostgreSQL + React** application with GitOps, and connects catalog entities, OpenAPI, Technology Radar, Argo CD, GitHub Actions, Orchestrator, Egyptian theme, and an organization entity model.
 
+> **Backstage workshop:** RHDH is Red Hat’s supported distribution of [Backstage](https://backstage.io/). Treat this as a Backstage workshop — catalog, TechDocs, plugins, and scaffolder content work the same on Community Backstage. We use Developer Hub and OpenShift because this is a Red Hat workshop; on vanilla Kubernetes you can reuse the same concepts with `kubectl` instead of `oc` (see [TUTORIAL.md — Developer Hub and Backstage](TUTORIAL.md#developer-hub-and-backstage)).
+
 ## Primary tutorial
 
 **[TUTORIAL.md](TUTORIAL.md)** — complete outline from a clean sandbox to the current state: commands, what/why, pros/cons per step, verification, and links to every configuration file you can customize.

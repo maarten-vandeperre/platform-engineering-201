@@ -5,6 +5,8 @@ _This originated after my Platform Engineering 101 sessions, where I got the que
   
 Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, optional Developer Lightspeed (OpenAI chat assistant), optional Ansible Automation Platform plugin, and a Backstage software template.
 
+**Backstage note:** RHDH is Red Hat’s distribution of Backstage. The catalog, plugins, scaffolder, and app-config patterns in this repo apply to **Community Backstage** as well. This workshop is tested on OpenShift (`oc`); on vanilla Kubernetes you can follow the same ideas with `kubectl` and your own ingress/Helm install — see [Developer Hub and Backstage](docs/workshop/TUTORIAL.md#developer-hub-and-backstage) in the tutorial.
+
 ## Start here
 
 - **[Complete tutorial](docs/workshop/TUTORIAL.md)** — clean sandbox → full workshop state (commands, rationale, config links)

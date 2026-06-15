@@ -2,6 +2,8 @@
 
 Deploy a Developer Hub (`Backstage`) instance with dynamic plugins for Kubernetes, Topology, Tech Radar, and Keycloak SSO.
 
+**Developer Hub vs Backstage:** RHDH is Red Hat’s distribution of Backstage. Everything you configure here — `app-config`, dynamic plugins, catalog locations, OIDC — is standard Backstage. Community Backstage on Kubernetes can run the same workshop with equivalent Helm/manifest setup; this repo’s install scripts target OpenShift.
+
 Bootstrap runs this automatically. Manual install:
 
 ```bash

@@ -1,5 +1,7 @@
 # 1. Prerequisites
 
+> **Platform:** Steps below assume **OpenShift** and the `oc` CLI. The workshop is a **Backstage** workshop delivered with **Red Hat Developer Hub**; the same catalog, app-config, and plugin patterns apply to Community Backstage on vanilla Kubernetes — use `kubectl` where this guide says `oc`, and adapt Routes to Ingress or port-forwarding. See [TUTORIAL.md — Developer Hub and Backstage](TUTORIAL.md#developer-hub-and-backstage).
+
 ## Cluster access
 
 - OpenShift 4.x cluster with a dedicated namespace/project

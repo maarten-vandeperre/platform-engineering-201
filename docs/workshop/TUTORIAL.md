@@ -4,6 +4,21 @@ End-to-end guide from a **clean OpenShift sandbox** to the **full workshop state
 
 Use this document as the **single tutorial outline**. Each step lists commands, what happens, why it matters, trade-offs, verification, and **exact files to edit** when customizing.
 
+## Developer Hub and Backstage
+
+This workshop is a **Backstage workshop** at heart: catalog entities, TechDocs, Tech Radar, scaffolder templates, dynamic plugins, Kubernetes/Topology, GitHub integrations, and Orchestrator are all standard Backstage concepts.
+
+We use **Red Hat Developer Hub** (RHDH) because this is a Red Hat workshop — RHDH is Red Hat’s supported distribution of [Backstage](https://backstage.io/). The app-config, catalog YAML, and plugin patterns you configure here transfer directly to **Community Backstage**.
+
+| This tutorial | Community Backstage on vanilla Kubernetes |
+|---------------|-------------------------------------------|
+| OpenShift + `oc` | Kubernetes + `kubectl` (same resources; Routes become Ingresses or port-forwards) |
+| RHDH Helm chart or RHDH operator | [Backstage Helm chart](https://backstage.io/docs/deployment/helm) or your own manifests |
+| OpenShift Routes | Ingress, Gateway API, or `kubectl port-forward` |
+| Red Hat–branded dynamic plugins | Most plugins are open source; check each plugin’s install docs |
+
+The scripts and manifests target OpenShift and are tested there. On plain Kubernetes you can reuse the **People app**, **Keycloak**, **catalog entities**, and **app-config** ideas; expect to adapt install scripts, ingress, and image pulls yourself. Treat `oc` in the commands as `kubectl` where the resource types match.
+
 ---
 
 ## How to use this tutorial
