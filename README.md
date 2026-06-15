@@ -5,6 +5,8 @@ _This originated after my Platform Engineering 101 sessions, where I got the que
   
 Workshop repository for **Red Hat Developer Hub on OpenShift** with a sample **Quarkus + PostgreSQL + React** CRUD application, GitOps deployment, OpenAPI catalog, Technology Radar, optional Developer Lightspeed (OpenAI chat assistant), optional Ansible Automation Platform plugin, and a Backstage software template.
 
+**Backstage note:** RHDH is Red Hat’s distribution of Backstage. The catalog, plugins, scaffolder, and app-config patterns in this repo apply to **Community Backstage** as well. This workshop is tested on OpenShift (`oc`); on vanilla Kubernetes you can follow the same ideas with `kubectl` and your own ingress/Helm install — see [Developer Hub and Backstage](docs/workshop/TUTORIAL.md#developer-hub-and-backstage) in the tutorial.
+
 ## Start here
 
 - **[Complete tutorial](docs/workshop/TUTORIAL.md)** — clean sandbox → full workshop state (commands, rationale, config links)
@@ -21,10 +23,10 @@ chmod +x scripts/*.sh scripts/lib/*.sh
 ./scripts/bootstrap-workshop.sh
 ```
 
-Helm instead of operators:
+Default install uses **Helm** (`WORKSHOP_INSTALL_METHOD=helm` in `workshop.env.example`) — no OperatorHub subscriptions. For the operator path:
 
 ```bash
-export WORKSHOP_INSTALL_METHOD=helm
+export WORKSHOP_INSTALL_METHOD=operator
 ./scripts/bootstrap-workshop.sh
 ```
 
@@ -38,14 +40,13 @@ Validate:
 ## Repair (workloads scaled down)
 
 ```bash
-./scripts/ensure-workshop-instances.sh   # scale Keycloak, RHDH, People app, etc.
+./scripts/ensure-workshop-platform.sh   # Keycloak, RHDH PostgreSQL, catalog server
 ./scripts/repair-people-app.sh
 ./scripts/repair-developer-hub.sh
 ./scripts/configure-developer-hub-catalog.sh
 ./scripts/setup-developer-hub-config.sh
 ./scripts/create-github-oauth-app.sh --oauth-app   # GitHub Actions CI tab
 ```
-
 ## Cleanup after demo
 
 Remove all workshop resources for a fresh start (safe if the demo was partial):
@@ -65,19 +66,7 @@ Optional **Developer Lightspeed** (AI chat via OpenAI + MCP catalog tools — se
 
 See [Developer Lightspeed](docs/workshop/06-install-developer-hub.md#developer-lightspeed) in the workshop guide.
 
-Optional **Ansible Automation Platform** plugin (Controller integration at `/ansible`):
-
-```bash
-./scripts/configure-aap-workshop-env.sh \
-  --url https://sandbox-aap-rh-ee-mvandepe-dev.apps.rm1.0a51.p1.openshiftapps.com \
-  --username admin \
-  --password 'your-password' \
-  --rh-registry-username <your-rh-registry-sa> \
-  --rh-registry-token <your-rh-registry-token> \
-  --apply
-```
-
-See [Ansible Automation Platform plugin](docs/workshop/06c-ansible-automation-platform.md).
+**Already installed on the base branch?** Upgrading to Lightspeed/MCP without a full reinstall: [patch-branch.md](docs/workshop/patch-branch.md).
 
 ## Repository structure
 

@@ -79,7 +79,7 @@ Cleanup is **not** required for idle scale-to-zero; repair scales instances back
 After cleanup (without `--delete-namespace`):
 
 ```bash
-oc get all,pvc,route -n "${WORKSHOP_NAMESPACE}"
+oc get deploy,statefulset,svc,route,pvc,buildconfig,imagestream,pod -n "${WORKSHOP_NAMESPACE}"
 ```
 
 The namespace should contain no People Service, Keycloak, Developer Hub, or catalog workloads. Some cluster-scoped operator CSVs may remain until `--remove-operators` is used.

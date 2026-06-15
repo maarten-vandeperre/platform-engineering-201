@@ -75,11 +75,11 @@ cleanup_delete_by_label() {
   fi
   cleanup_log "Deleting resources in ${namespace} with label ${label}"
   if [[ "${CLEANUP_DRY_RUN:-false}" == "true" ]]; then
-    oc get all,configmap,secret,route,pvc,buildconfig,build,imagestream,job,cronjob,statefulset \
+    oc get deploy,statefulset,svc,route,pvc,buildconfig,build,imagestream,job,cronjob,pod,configmap,secret \
       -n "${namespace}" -l "${label}" --no-headers 2>/dev/null || true
     return 0
   fi
-  oc delete all,configmap,secret,route,pvc,buildconfig,build,imagestream,job,cronjob,statefulset \
+  oc delete deploy,statefulset,svc,route,pvc,buildconfig,build,imagestream,job,cronjob,pod,configmap,secret \
     -n "${namespace}" -l "${label}" --ignore-not-found --wait=false 2>/dev/null || true
 }
 

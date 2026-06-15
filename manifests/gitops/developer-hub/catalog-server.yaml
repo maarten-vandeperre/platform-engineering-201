@@ -36,7 +36,8 @@ spec:
             capabilities:
               drop: [ALL]
             runAsNonRoot: true
-            runAsUser: 1003920000
+            seccompProfile:
+              type: RuntimeDefault
       volumes:
         - name: catalog
           configMap:

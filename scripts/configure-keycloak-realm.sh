@@ -17,6 +17,12 @@ if [[ -z "${KEYCLOAK_URL:-}" ]]; then
 fi
 
 wait_for_keycloak() {
+  if ! oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    echo "Keycloak is not deployed in ${WORKSHOP_NAMESPACE}." >&2
+    echo "Run ./scripts/bootstrap-workshop.sh or ./scripts/setup-keycloak.sh first." >&2
+    return 1
+  fi
+
   local attempts="${1:-60}"
   local i
   for ((i = 1; i <= attempts; i++)); do
