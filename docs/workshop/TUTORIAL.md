@@ -227,7 +227,30 @@ echo "Namespace: ${WORKSHOP_NAMESPACE}, Router: ${CLUSTER_ROUTER_BASE}"
 
 Enable Developer Hub **CI**, **Issues**, and **Pull Requests** tabs plus scaffolder publish.
 
+### When to run this module
+
+Developer Hub must exist before credentials can be **pushed to the cluster**. You have two valid paths:
+
+| Path | When | Commands |
+|------|------|----------|
+| **A — credentials before bootstrap** (recommended) | After Module 1, **before** Module 3 | Save tokens to `workshop.env` only (`--no-apply`). Bootstrap (Module 3) applies them via `setup-developer-hub-config.sh`. |
+| **B — credentials after bootstrap** | After Module 3 (or Module 9) | Run `./scripts/setup-github-auth.sh` with no flags — applies to a live Developer Hub. |
+
+If you run `./scripts/setup-github-auth.sh` **without** `--no-apply` before bootstrap, it fails: Keycloak and Developer Hub are not installed yet (empty namespace).
+
 ### Commands
+
+**Path A — before bootstrap** (save to `workshop.env` only):
+
+```bash
+./scripts/create-github-oauth-app.sh --oauth-app --no-apply
+./scripts/setup-github-auth.sh --open-pat-url --no-apply
+
+# Then continue to Module 3:
+./scripts/bootstrap-workshop.sh
+```
+
+**Path B — after bootstrap**:
 
 ```bash
 # OAuth App + PAT (recommended — interactive PAT prompt)
@@ -243,8 +266,10 @@ GITHUB_TOKEN=ghp_... ./scripts/setup-github-auth.sh --pat-only --no-interactive
 
 ### What happens
 
-- `GITHUB_TOKEN` → Secret `rhdh-workshop-secrets` (GitHub proxy, scaffolder)
-- OAuth client ID/secret → Developer Hub `auth.providers.github` in app-config
+- **With `--no-apply`:** only `scripts/workshop.env` is updated (`GITHUB_TOKEN`, OAuth client ID/secret).
+- **Without `--no-apply` (after bootstrap):** same env file updates, plus:
+  - `GITHUB_TOKEN` → Secret `rhdh-workshop-secrets` (GitHub proxy, scaffolder)
+  - OAuth client ID/secret → Developer Hub `auth.providers.github` in app-config
 
 ### Why
 
@@ -278,7 +303,7 @@ https://redhat-developer-hub-<namespace>.<router>/api/auth/github/handler/frame
 
 ### Goal
 
-Install the entire stack with one script (recommended after Modules 0–1).
+Install the entire stack with one script (recommended after Modules 0–1; Module 2 credentials in `workshop.env` are applied automatically during bootstrap).
 
 ### Commands
 

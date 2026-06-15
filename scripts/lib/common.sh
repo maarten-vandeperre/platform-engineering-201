@@ -168,6 +168,9 @@ wait_keycloak_http_ready() {
 
 ensure_keycloak_running() {
   if ! oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    echo "Keycloak is not deployed in ${WORKSHOP_NAMESPACE}."
+    echo "Deploying Keycloak (run ./scripts/bootstrap-workshop.sh for the full stack)..."
+    "${SCRIPTS_DIR}/setup-keycloak.sh"
     return 0
   fi
 
@@ -228,6 +231,30 @@ ensure_workshop_platform() {
   ensure_rhdh_postgres
   ensure_catalog_server
   echo "Workshop platform dependencies are ready."
+}
+
+developer_hub_installed() {
+  oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1 \
+    || oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1 \
+    || oc get backstage "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1
+}
+
+require_developer_hub() {
+  if developer_hub_installed; then
+    return 0
+  fi
+  cat <<EOF >&2
+Developer Hub is not installed in ${RHDH_NAMESPACE}.
+Install the workshop platform first:
+
+  ./scripts/bootstrap-workshop.sh
+
+Helm path (no operators):
+
+  export WORKSHOP_INSTALL_METHOD=helm
+  ./scripts/bootstrap-workshop.sh
+EOF
+  return 1
 }
 
 upsert_workshop_env() {
