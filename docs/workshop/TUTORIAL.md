@@ -327,18 +327,33 @@ Run the commands one-by-one if you want to see what's happening, what's required
 chmod +x scripts/*.sh scripts/lib/*.sh
 source scripts/workshop.env
 
-# Default: operators + full stack
+# Default in workshop.env.example: WORKSHOP_INSTALL_METHOD=helm (no OperatorHub subscriptions)
 ./scripts/bootstrap-workshop.sh
 
-# Alternatives:
-# export WORKSHOP_INSTALL_METHOD=helm    # no OperatorHub subscriptions
-# export SKIP_ARGOCD=true                # skip GitOps / CD tab
-# export RUN_E2E=true                    # run Selenium tests at end
+# Alternatives (set in workshop.env or export before bootstrap):
+# export WORKSHOP_INSTALL_METHOD=operator   # OpenShift GitOps + RHDH operators (Module 4)
+# export SKIP_ARGOCD=true                   # skip GitOps / CD tab
+# export RUN_E2E=true                       # run Selenium tests at end
 ```
 
 ### What happens
 
-[`scripts/bootstrap-workshop.sh`](../../scripts/bootstrap-workshop.sh) runs this sequence:
+[`scripts/bootstrap-workshop.sh`](../../scripts/bootstrap-workshop.sh) reads `WORKSHOP_INSTALL_METHOD` from `workshop.env`. **Helm** is the default for shared OpenShift sandboxes; **operator** is the supported Red Hat path when you have Subscription access.
+
+**Helm path** (`WORKSHOP_INSTALL_METHOD=helm` — default):
+
+| Order | Script | Module |
+|------:|--------|--------|
+| 1 | `setup-keycloak.sh` | [5](#module-5--keycloak-identity) |
+| 2 | `deploy-people-app.sh` | [7](#module-7--people-service-application) |
+| 3 | `install-argocd-helm.sh` | [6](#module-6--argocd-gitops), [03b](03b-install-with-helm.md) |
+| 4 | `install-developer-hub-helm.sh` | [8](#module-8--red-hat-developer-hub), [03b](03b-install-with-helm.md) |
+| 5 | `setup-argocd-token.sh` | [6](#module-6--argocd-gitops) |
+| 6–13 | config, catalog, orchestrator, validate | [9](#module-9--developer-hub-configuration)–[12](#module-12--validation--repair) |
+
+Skip [Module 4](#module-4--install-platform-operators) on the Helm path — Argo CD and Developer Hub install from Helm charts instead of operators.
+
+**Operator path** (`WORKSHOP_INSTALL_METHOD=operator`):
 
 | Order | Script | Module |
 |------:|--------|--------|
@@ -348,13 +363,7 @@ source scripts/workshop.env
 | 4 | `deploy-people-app.sh` | [7](#module-7--people-service-application) |
 | 5 | `install-developer-hub.sh` | [8](#module-8--red-hat-developer-hub) |
 | 6 | `setup-argocd-token.sh` | [6](#module-6--argocd-gitops) |
-| 7 | `setup-developer-hub-kubernetes.sh` | [9](#module-9--developer-hub-configuration) |
-| 8 | `setup-developer-hub-config.sh` | [9](#module-9--developer-hub-configuration) |
-| 9 | `configure-developer-hub-catalog.sh` | [10](#module-10--catalog-integrations--theme) |
-| 10 | `setup-developer-hub-techdocs.sh` | [10](#module-10--catalog-integrations--theme) |
-| 11 | `setup-orchestrator.sh` | [11](#module-11--orchestrator-workflow) |
-| 12 | `ensure-workshop-platform.sh` | [12](#module-12--validation--repair) |
-| 13 | `validate-workshop.sh` | [12](#module-12--validation--repair) |
+| 7–13 | config, catalog, orchestrator, validate | [9](#module-9--developer-hub-configuration)–[12](#module-12--validation--repair) |
 
 ### Why
 
@@ -375,9 +384,11 @@ See [Module 12](#module-12--validation--repair).
 
 ## Module 4 — Install platform operators
 
+> **Helm path:** If `WORKSHOP_INSTALL_METHOD=helm` in `workshop.env` (the default), **skip this module**. Bootstrap installs Argo CD and Developer Hub with Helm instead — see [03b-install-with-helm.md](03b-install-with-helm.md) and the Helm table in [Module 3](#module-3--one-command-bootstrap-or-break-down-into-separate-steps).
+
 ### Goal
 
-Install **OpenShift GitOps** and **Red Hat Developer Hub** operators in your namespace.
+Install **OpenShift GitOps** and **Red Hat Developer Hub** operators in your namespace (`WORKSHOP_INSTALL_METHOD=operator` only).
 
 ### Commands
 
@@ -406,7 +417,7 @@ Operators install CRDs and controllers for `ArgoCD` and `Backstage` custom resou
 | Supported Red Hat path | Needs Subscription permission in namespace |
 | CR-based lifecycle | Slower first install (CSV rollout) |
 
-**Alternative:** [03b-install-with-helm.md](03b-install-with-helm.md) — `WORKSHOP_INSTALL_METHOD=helm`, no subscriptions.
+**Helm alternative (default for most sandboxes):** [03b-install-with-helm.md](03b-install-with-helm.md) — set `WORKSHOP_INSTALL_METHOD=helm` in `workshop.env`; no subscriptions or Module 4.
 
 ### Customize
 

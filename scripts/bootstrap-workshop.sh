@@ -7,7 +7,7 @@ source "${SCRIPT_DIR}/lib/common.sh"
 
 echo "Platform Engineering 201 — full workshop bootstrap"
 echo "Namespace: ${WORKSHOP_NAMESPACE}"
-echo "Install method: ${WORKSHOP_INSTALL_METHOD:-operator}"
+echo "Install method: ${WORKSHOP_INSTALL_METHOD:-helm}"
 echo ""
 
 chmod +x "${SCRIPT_DIR}"/*.sh "${SCRIPT_DIR}/lib/"*.sh 2>/dev/null || true
@@ -16,7 +16,7 @@ detect_cluster_router_base
 ensure_project
 
 install_platform() {
-  case "${WORKSHOP_INSTALL_METHOD:-operator}" in
+  case "${WORKSHOP_INSTALL_METHOD:-helm}" in
     operator)
       "${SCRIPT_DIR}/install-operators.sh"
       if [[ "${SKIP_ARGOCD:-false}" != "true" ]]; then
@@ -37,7 +37,7 @@ install_platform() {
 }
 
 install_developer_hub() {
-  case "${WORKSHOP_INSTALL_METHOD:-operator}" in
+  case "${WORKSHOP_INSTALL_METHOD:-helm}" in
     operator)
       "${SCRIPT_DIR}/install-developer-hub.sh"
       ;;

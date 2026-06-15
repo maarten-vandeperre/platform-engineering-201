@@ -65,10 +65,12 @@ This runs the full sequence:
 | RHDH config | `setup-developer-hub-kubernetes.sh`, `setup-developer-hub-config.sh`, `configure-developer-hub-catalog.sh` |
 | Validate | `validate-workshop.sh` |
 
-**Helm path** (no operators):
+**Default (Helm, no operators):** `WORKSHOP_INSTALL_METHOD=helm` in `workshop.env.example` — just run `./scripts/bootstrap-workshop.sh`.
+
+**Operator path** (needs Subscription permission):
 
 ```bash
-export WORKSHOP_INSTALL_METHOD=helm
+export WORKSHOP_INSTALL_METHOD=operator
 ./scripts/bootstrap-workshop.sh
 ```
 

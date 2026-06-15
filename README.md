@@ -23,10 +23,10 @@ chmod +x scripts/*.sh scripts/lib/*.sh
 ./scripts/bootstrap-workshop.sh
 ```
 
-Helm instead of operators:
+Default install uses **Helm** (`WORKSHOP_INSTALL_METHOD=helm` in `workshop.env.example`) — no OperatorHub subscriptions. For the operator path:
 
 ```bash
-export WORKSHOP_INSTALL_METHOD=helm
+export WORKSHOP_INSTALL_METHOD=operator
 ./scripts/bootstrap-workshop.sh
 ```
 
