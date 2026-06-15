@@ -167,11 +167,20 @@ cp scripts/workshop.env.example scripts/workshop.env
 
 ### What happens
 
-`workshop.env` becomes the single source of truth for all scripts via [`scripts/lib/common.sh`](../../scripts/lib/common.sh).
+You create a **local** `scripts/workshop.env` (gitignored) from [`scripts/workshop.env.example`](../../scripts/workshop.env.example). That file holds every value that differs per person or cluster: namespace, GitHub fork, router domain, passwords, install method, and optional integrations (GitHub PAT, Argo CD, AAP, Lightspeed).
+
+Every workshop script starts by sourcing [`scripts/lib/common.sh`](../../scripts/lib/common.sh). That library:
+
+1. **Loads** `scripts/workshop.env` if it exists, otherwise falls back to `workshop.env.example`.
+2. **Exports** the variables (for example `WORKSHOP_NAMESPACE`, `CLUSTER_ROUTER_BASE`, `KEYCLOAK_*`, `RHDH_*`) so child scripts and `envsubst` see the same values.
+3. **Renders** manifests from `manifests/gitops/` via `render_manifest()`: placeholders like `${WORKSHOP_NAMESPACE}` in YAML are replaced with your values before `oc apply`.
+4. **Auto-detects** `CLUSTER_ROUTER_BASE` from the OpenShift console route during bootstrap when you leave the example default.
+
+So you edit one file; bootstrap, deploy, repair, cleanup, and validation scripts all read the same configuration without duplicating secrets or namespace names in Git.
 
 ### Why
 
-Manifests use `${WORKSHOP_NAMESPACE}` placeholders rendered with `envsubst` — no hard-coded cluster values in Git.
+Manifests stay generic in the repository (`namespace: ${WORKSHOP_NAMESPACE}`) while your fork and sandbox stay private in `workshop.env`. That pattern keeps the repo shareable, makes re-runs predictable, and lets you change namespace or credentials once instead of hunting through dozens of YAML files.
 
 ### Pros and cons
 
@@ -184,10 +193,22 @@ Manifests use `${WORKSHOP_NAMESPACE}` placeholders rendered with `envsubst` — 
 
 | Setting | File |
 |---------|------|
-| All workshop variables | [`scripts/workshop.env`](../../scripts/workshop.env) (from [`.example`](../../scripts/workshop.env.example)) |
-| GitHub slug on catalog entities | [`manifests/gitops/catalog/entities/people-service.yaml`](../../manifests/gitops/catalog/entities/people-service.yaml) |
-| GitHub slug on API entity | [`manifests/gitops/catalog/entities/people-api.yaml`](../../manifests/gitops/catalog/entities/people-api.yaml) |
-| Inline catalog copy (ConfigMap) | [`manifests/gitops/developer-hub/catalog-configmap.yaml`](../../manifests/gitops/developer-hub/catalog-configmap.yaml) |
+| All workshop variables (namespace, GitHub fork, router, credentials) | [`scripts/workshop.env`](../../scripts/workshop.env) (from [`.example`](../../scripts/workshop.env.example)) |
+| GitHub org/repo for catalog CI, source links, and scaffolder | `WORKSHOP_GITHUB_ORG`, `WORKSHOP_GITHUB_REPO`, `WORKSHOP_GIT_REPO`, `WORKSHOP_GIT_BRANCH` in `workshop.env` — substituted into manifests at deploy time |
+| Catalog entity content (titles, tags, extra links, templates) | [`manifests/gitops/developer-hub/catalog-configmap.yaml`](../../manifests/gitops/developer-hub/catalog-configmap.yaml) — re-run [`configure-developer-hub-catalog.sh`](../../scripts/configure-developer-hub-catalog.sh) after edits |
+
+The files under `manifests/gitops/catalog/entities/` (`people-service.yaml`, `people-api.yaml`) use the same `${WORKSHOP_GITHUB_ORG}` / `${WORKSHOP_GITHUB_REPO}` placeholders; you do **not** edit them to point at your fork. Set your fork in `workshop.env` instead.
+
+**Important!!!**   
+Do not forget to review the workshop.env properties, with main focus on:
+* CLUSTER_ROUTER_BASE
+* WORKSHOP_NAMESPACE
+* WORKSHOP_GIT_REPO
+* WORKSHOP_GITHUB_ORG
+* WORKSHOP_GITHUB_REPO
+
+  
+_If you don't use Ansible (later stage), you can entirely skip AAP_* and RH_REGISTRY_* properties._
 
 See [02-configuration.md](02-configuration.md) for the full variable table.
 

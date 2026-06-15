@@ -27,10 +27,11 @@ Optional:
 
 ## Fork the repository
 
-Fork [platform-engineering-201](https://github.com/maarten-vandeperre/platform-engineering-201) to your GitHub organization and update:
+Fork [platform-engineering-201](https://github.com/maarten-vandeperre/platform-engineering-201) to your GitHub organization and update `scripts/workshop.env`:
 
-- `scripts/workshop.env` — git repo URL, GitHub org, `CLUSTER_ROUTER_BASE`
-- `manifests/gitops/catalog/entities/people-service.yaml` — `github.com/project-slug` annotation
+- `WORKSHOP_GIT_REPO` — clone URL of your fork
+- `WORKSHOP_GITHUB_ORG` / `WORKSHOP_GITHUB_REPO` — used for catalog annotations such as `github.com/project-slug` (rendered via `envsubst`; not hard-coded in YAML)
+- `CLUSTER_ROUTER_BASE` — your OpenShift apps domain
 
 ## GitHub token (required for scaffolder publish)
 
