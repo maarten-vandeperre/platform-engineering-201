@@ -282,6 +282,52 @@ apply_dynamic_plugins_config() {
   echo "Applied dynamic plugins to ConfigMap ${target_cm}"
 }
 
+require_aap_registry_credentials() {
+  if [[ -n "${RH_REGISTRY_PULL_SECRET:-}" ]]; then
+    return 0
+  fi
+  if [[ -n "${RH_REGISTRY_USERNAME:-}" && "${RH_REGISTRY_USERNAME}" != "changeme" \
+    && -n "${RH_REGISTRY_TOKEN:-}" && "${RH_REGISTRY_TOKEN}" != "changeme" ]]; then
+    return 0
+  fi
+  cat <<EOF >&2
+ERROR: AAP_ENABLED=true but Red Hat registry credentials are missing.
+
+Ansible OCI dynamic plugins are pulled from registry.redhat.io during install-dynamic-plugins.
+Create a service account at https://access.redhat.com/terms-based-registry/accounts and set:
+
+  export RH_REGISTRY_USERNAME=<service-account-name>
+  export RH_REGISTRY_TOKEN=<token>
+
+Or run:
+
+  ./scripts/configure-aap-workshop-env.sh --rh-registry-username <sa> --rh-registry-token <token>
+
+EOF
+  return 1
+}
+
+rollout_timeout_for_config() {
+  if is_aap_enabled; then
+    echo "1800s"
+  elif is_lightspeed_enabled; then
+    echo "900s"
+  else
+    echo "600s"
+  fi
+}
+
+prepare_developer_hub_rollout() {
+  if is_aap_enabled; then
+    require_aap_registry_credentials
+    "${SCRIPTS_DIR}/setup-developer-hub-aap.sh" --no-rollout
+  fi
+
+  if is_lightspeed_enabled; then
+    "${SCRIPTS_DIR}/setup-developer-hub-lightspeed.sh" --no-rollout
+  fi
+}
+
 APP_CONFIG=$(render_app_config)
 apply_dynamic_plugins_config
 
@@ -304,10 +350,12 @@ if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1
     RHDH_OIDC_CLIENT_SECRET="${RHDH_OIDC_CLIENT_SECRET}" \
     --overwrite
   configure_kubernetes_env redhat-developer-hub
+  prepare_developer_hub_rollout
   echo "Restarting Developer Hub to apply configuration..."
+  rollout_timeout="$(rollout_timeout_for_config)"
   if developer_hub_uses_plugins_pvc redhat-developer-hub \
     || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-    safe_rollout_developer_hub redhat-developer-hub 600s
+    safe_rollout_developer_hub redhat-developer-hub "${rollout_timeout}"
   else
     oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
     for i in $(seq 1 60); do
@@ -374,10 +422,26 @@ if is_aap_enabled && [[ "${RH_REGISTRY_TOKEN:-changeme}" == "changeme" ]]; then
   echo "  https://access.redhat.com/terms-based-registry/accounts"
 fi
 
+if is_aap_enabled && ! is_aap_management_enabled; then
+  echo ""
+  echo "NOTE: AAP_ENABLED=true but AAP_MANAGEMENT_ENABLED is not true."
+  echo "The upstream /ansible plugin is configured; the custom /aap-management plugin is skipped."
+  echo "To install the custom AAP Management plugin (Templates + job history):"
+  echo "  export AAP_MANAGEMENT_ENABLED=true   # in scripts/workshop.env"
+  echo "  ./scripts/setup-developer-hub-config.sh"
+  echo "Or: ./scripts/setup-custom-aap-management-plugin.sh"
+fi
+
+if is_aap_management_enabled && ! is_aap_enabled; then
+  echo ""
+  echo "WARNING: AAP_MANAGEMENT_ENABLED=true but AAP_ENABLED is not true."
+  echo "The custom plugin needs AAP_CONTROLLER_URL and AAP_TOKEN; set AAP_ENABLED=true as well."
+fi
+
 "${SCRIPTS_DIR}/setup-developer-hub-techdocs.sh" || echo "Warning: TechDocs volume setup skipped."
 
 if is_lightspeed_enabled; then
-  "${SCRIPTS_DIR}/setup-developer-hub-lightspeed.sh" --force-rollout || \
+  "${SCRIPTS_DIR}/setup-developer-hub-lightspeed.sh" --no-rollout || \
     echo "Warning: Developer Lightspeed setup failed; see docs/workshop/06-install-developer-hub.md"
 elif [[ "${LIGHTSPEED_ENABLED:-false}" != "false" ]]; then
   echo ""
@@ -386,8 +450,8 @@ elif [[ "${LIGHTSPEED_ENABLED:-false}" != "false" ]]; then
 fi
 
 if is_aap_enabled; then
-  "${SCRIPTS_DIR}/setup-developer-hub-aap.sh" --force-rollout || \
-    echo "Warning: Ansible Automation Platform setup failed; see docs/workshop/06-install-developer-hub.md"
+  "${SCRIPTS_DIR}/setup-developer-hub-aap.sh" --no-rollout || \
+    echo "Warning: Ansible Automation Platform setup failed; see docs/workshop/06c-ansible-automation-platform.md"
 elif [[ "${AAP_ENABLED:-false}" != "false" ]]; then
   echo ""
   echo "NOTE: Set AAP_ENABLED=true and AAP_* / RH_REGISTRY_* in workshop.env, then re-run:"
