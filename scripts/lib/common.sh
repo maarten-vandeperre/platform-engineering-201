@@ -49,21 +49,42 @@ export WORKSHOP_INSTALL_METHOD
 export SKIP_ARGOCD
 export RUN_E2E
 
-detect_cluster_router_base() {
-  if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+# Argo CD is optional. Helm path skips it unless SKIP_ARGOCD=false (opt-in CD tab).
+# Operator path installs Argo CD unless SKIP_ARGOCD=true.
+argocd_enabled() {
+  case "${SKIP_ARGOCD:-}" in
+    true | TRUE | yes | YES | 1) return 1 ;;
+    false | FALSE | no | NO | 0) return 0 ;;
+  esac
+  [[ "${WORKSHOP_INSTALL_METHOD:-helm}" != "helm" ]]
+}
+
+argocd_skip_message() {
+  if argocd_enabled; then
     return 0
   fi
+  echo "Argo CD skipped (Helm path default). Set SKIP_ARGOCD=false in workshop.env for GitOps CD tab."
+}
+
+detect_cluster_router_base() {
   local host=""
   host=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
   if [[ -z "${host}" ]]; then
     host=$(oc get route -n openshift-console -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
   fi
   if [[ -n "${host}" && "${host}" == console-openshift-console.* ]]; then
-    export CLUSTER_ROUTER_BASE="${host#console-openshift-console.}"
-    echo "Detected CLUSTER_ROUTER_BASE=${CLUSTER_ROUTER_BASE}"
-  elif [[ -z "${CLUSTER_ROUTER_BASE:-}" ]]; then
-    echo "Set CLUSTER_ROUTER_BASE in scripts/workshop.env (e.g. apps.cluster-name.example.com)" >&2
+    local detected="${host#console-openshift-console.}"
+    if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "${detected}" \
+      && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+      echo "Updating CLUSTER_ROUTER_BASE: ${CLUSTER_ROUTER_BASE} -> ${detected} (current cluster)"
+    fi
+    export CLUSTER_ROUTER_BASE="${detected}"
+    return 0
   fi
+  if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+    return 0
+  fi
+  echo "Set CLUSTER_ROUTER_BASE in scripts/workshop.env (e.g. apps.cluster-name.example.com)" >&2
 }
 
 require_oc() {
@@ -95,6 +116,34 @@ apply_rendered_dir() {
   while IFS= read -r -d '' file; do
     render_manifest "${file}" | oc apply -f -
   done < <(find "${dir}" -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | sort -z)
+}
+
+# Clear pending-install/upgrade Helm locks left by interrupted installs (API timeout, Ctrl+C).
+helm_unlock_release() {
+  local release="$1"
+  local namespace="$2"
+  local status last_deployed
+
+  command -v helm >/dev/null 2>&1 || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  if ! helm status "${release}" -n "${namespace}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  status=$(helm status "${release}" -n "${namespace}" -o json 2>/dev/null | jq -r '.info.status // empty')
+  case "${status}" in
+    pending-install | pending-upgrade | pending-rollback)
+      echo "Helm release ${release} is stuck in ${status} (often after API disconnect). Recovering..."
+      last_deployed=$(helm history "${release}" -n "${namespace}" -o json 2>/dev/null \
+        | jq -r '[.[] | select(.status == "deployed") | .revision] | last // empty')
+      if [[ -n "${last_deployed}" ]]; then
+        helm rollback "${release}" "${last_deployed}" -n "${namespace}" --wait --timeout 10m
+      else
+        echo "No deployed revision for ${release}; removing stuck release..." >&2
+        helm uninstall "${release}" -n "${namespace}" --wait --timeout 10m || true
+      fi
+      ;;
+  esac
 }
 
 wait_for_csv() {
@@ -211,16 +260,25 @@ ensure_catalog_server() {
     return 0
   fi
 
-  local replicas ready
+  local replicas ready replica_failure
   replicas=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \
     -o jsonpath='{.spec.replicas}')
   ready=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \
     -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  replica_failure=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.status.conditions[?(@.type=="ReplicaFailure")].status}' 2>/dev/null || echo "False")
 
-  if [[ "${replicas}" == "0" || "${ready}" != "1" ]]; then
+  if [[ "${replica_failure}" == "True" ]] || [[ "${replicas}" == "0" || "${ready}" != "1" ]]; then
     echo "Ensuring workshop catalog server is running in ${WORKSHOP_NAMESPACE}..."
+    if [[ "${replica_failure}" == "True" ]]; then
+      echo "Re-applying catalog server manifest (previous rollout failed)..."
+      render_manifest "${MANIFESTS_DIR}/developer-hub/catalog-server.yaml" | oc apply -f -
+    fi
     oc scale deployment/workshop-catalog-server --replicas=1 -n "${WORKSHOP_NAMESPACE}"
-    oc rollout status deployment/workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" --timeout=300s
+    if ! oc rollout status deployment/workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" --timeout=300s; then
+      echo "Catalog server rollout failed. Run ./scripts/configure-developer-hub-catalog.sh" >&2
+      return 1
+    fi
   fi
 }
 

@@ -87,7 +87,7 @@ If the pod is still stuck, delete the Developer Hub pod so it recreates, or run 
 |---------|-----|
 | Init container stuck on `Waiting for lock release` | `./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock` |
 | Force re-download all plugins after config change | Delete PVC `dynamic-plugins-root` (cache rebuilds on next start) |
-| Helm install | Apply PVC + run cache script after `helm upgrade`, or use [`rhdh-values.yaml`](../../manifests/helm/rhdh-values.yaml) `extraVolumes` |
+| Helm install | Run `./scripts/setup-developer-hub-dynamic-plugins-cache.sh` after `helm upgrade` (do not add `extraVolumes` in values — breaks chart volumes) |
 
 See [Red Hat docs: Use the dynamic plugins cache](https://docs.redhat.com/en/documentation/red_hat_developer_hub/1.9/html/configuring_red_hat_developer_hub/use-the-dynamic-plugins-cache_configuring-rhdh).
 

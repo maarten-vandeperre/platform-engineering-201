@@ -22,7 +22,7 @@ cp scripts/workshop.env.example scripts/workshop.env
 | `WORKSHOP_BACKEND_IMAGE` | Backend container image | OpenShift ImageStream |
 | `WORKSHOP_FRONTEND_IMAGE` | Frontend container image | OpenShift ImageStream |
 | `WORKSHOP_INSTALL_METHOD` | Bootstrap path: `helm`, `operator`, `skip-platform` | `helm` |
-| `SKIP_ARGOCD` | Skip Argo CD install and CD tab setup (independent of install method) | `false` |
+| `SKIP_ARGOCD` | Argo CD install and CD tab. Helm: skipped unless set to `false`. Operator: installed unless `true`. | unset (Helm skips) |
 | `RUN_E2E` | Run Selenium tests after bootstrap | `false` |
 | `RHDH_INSTANCE_NAME` | Developer Hub Backstage CR name | `developer-hub` |
 | `RHDH_APP_TITLE` | Browser title and header (Egyptian theme) | `Nile Developer Hub` |

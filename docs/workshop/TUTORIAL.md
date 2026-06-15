@@ -1,4 +1,5 @@
 # Platform Engineering 201 — Complete Tutorial
+_I've tested the commands on a MacBook._
 
 End-to-end guide from a **clean OpenShift sandbox** to the **full workshop state**: People CRUD app, Keycloak, GitOps, Red Hat Developer Hub with catalog, TechDocs, Tech Radar, Learning Paths, GitHub integrations, Orchestrator workflow, Egyptian theme, and organization entity model.
 
@@ -331,8 +332,8 @@ source scripts/workshop.env
 ./scripts/bootstrap-workshop.sh
 
 # Alternatives (set in workshop.env or export before bootstrap):
+# export SKIP_ARGOCD=false                  # opt in to Argo CD Helm + GitOps CD tab
 # export WORKSHOP_INSTALL_METHOD=operator   # OpenShift GitOps + RHDH operators (Module 4)
-# export SKIP_ARGOCD=true                   # skip GitOps / CD tab
 # export RUN_E2E=true                       # run Selenium tests at end
 ```
 
@@ -340,15 +341,15 @@ source scripts/workshop.env
 
 [`scripts/bootstrap-workshop.sh`](../../scripts/bootstrap-workshop.sh) reads `WORKSHOP_INSTALL_METHOD` from `workshop.env`. **Helm** is the default for shared OpenShift sandboxes; **operator** is the supported Red Hat path when you have Subscription access.
 
-**Helm path** (`WORKSHOP_INSTALL_METHOD=helm` — default):
+**Helm path** (`WORKSHOP_INSTALL_METHOD=helm` — default). **Argo CD is skipped** unless you set `SKIP_ARGOCD=false` in `workshop.env` (opt-in for the GitOps CD tab; needs CRD permission on many clusters):
 
 | Order | Script | Module |
 |------:|--------|--------|
 | 1 | `setup-keycloak.sh` | [5](#module-5--keycloak-identity) |
 | 2 | `deploy-people-app.sh` | [7](#module-7--people-service-application) |
-| 3 | `install-argocd-helm.sh` | [6](#module-6--argocd-gitops), [03b](03b-install-with-helm.md) |
-| 4 | `install-developer-hub-helm.sh` | [8](#module-8--red-hat-developer-hub), [03b](03b-install-with-helm.md) |
-| 5 | `setup-argocd-token.sh` | [6](#module-6--argocd-gitops) |
+| 3 | `install-developer-hub-helm.sh` | [8](#module-8--red-hat-developer-hub), [03b](03b-install-with-helm.md) |
+| 4 | (optional) `install-argocd-helm.sh` | [6](#module-6--argocd-gitops) — only if `SKIP_ARGOCD=false` |
+| 5 | (optional) `setup-argocd-token.sh` | [6](#module-6--argocd-gitops) |
 | 6–13 | config, catalog, orchestrator, validate | [9](#module-9--developer-hub-configuration)–[12](#module-12--validation--repair) |
 
 Skip [Module 4](#module-4--install-platform-operators) on the Helm path — Argo CD and Developer Hub install from Helm charts instead of operators.
