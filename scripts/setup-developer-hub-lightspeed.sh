@@ -85,13 +85,12 @@ fi
 echo "Setting up Developer Lightspeed in ${RHDH_NAMESPACE}..."
 
 export RHDH_HOST="$(resolve_rhdh_host)"
-ensure_mcp_token
+sync_mcp_token_in_app_config
 
 render_manifest "${MANIFESTS_DIR}/developer-hub/lightspeed-stack-configmap.yaml" | oc apply -f -
 render_manifest "${MANIFESTS_DIR}/developer-hub/lightspeed-app-config.yaml" | oc apply -f -
 render_manifest "${MANIFESTS_DIR}/developer-hub/lightspeed-rbac-policies.yaml" | oc apply -f -
 render_manifest "${MANIFESTS_DIR}/developer-hub/lightspeed-llama-stack-secret.yaml" | oc apply -f -
-render_manifest "${MANIFESTS_DIR}/developer-hub/lightspeed-mcp-token-secret.yaml" | oc apply -f -
 if [[ "${LIGHTSPEED_SAFETY_GUARD:-false}" == "true" ]]; then
   echo "LIGHTSPEED_SAFETY_GUARD=true — using default Llama Stack safety guard (requires SAFETY_URL)."
 else
@@ -243,8 +242,7 @@ oc get rs -n "${RHDH_NAMESPACE}" -o json \
     done
 
 echo "Rolling out Developer Hub to apply Developer Lightspeed configuration..."
-oc rollout restart "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}"
-oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout=900s
+safe_rollout_developer_hub "${deploy_name}" 900s
 
 RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null \
   || get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null \

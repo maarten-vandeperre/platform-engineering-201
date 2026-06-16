@@ -55,36 +55,43 @@ export LIGHTSPEED_VLLM_MAX_TOKENS
 export LIGHTSPEED_ENABLE_OPENAI
 export LIGHTSPEED_SAFETY_GUARD
 export MCP_TOKEN
-export AAP_ENABLED
-export AAP_CONTROLLER_URL
-export AAP_TOKEN
-export AAP_CHECK_SSL
-export AAP_CREATOR_SERVICE_ENABLED
-export AAP_DEVTOOLS_IMAGE
-export AAP_AUTOMATION_HUB_URL
-export AAP_DEVSPACES_URL
-export RH_REGISTRY_USERNAME
-export RH_REGISTRY_TOKEN
-export RH_REGISTRY_PULL_SECRET
-export AAP_ADMIN_USERNAME
-export AAP_ADMIN_PASSWORD
-export AAP_MANAGEMENT_ENABLED
 
-detect_cluster_router_base() {
-  if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+# Argo CD is optional. Helm path skips it unless SKIP_ARGOCD=false (opt-in CD tab).
+# Operator path installs Argo CD unless SKIP_ARGOCD=true.
+argocd_enabled() {
+  case "${SKIP_ARGOCD:-}" in
+    true | TRUE | yes | YES | 1) return 1 ;;
+    false | FALSE | no | NO | 0) return 0 ;;
+  esac
+  [[ "${WORKSHOP_INSTALL_METHOD:-helm}" != "helm" ]]
+}
+
+argocd_skip_message() {
+  if argocd_enabled; then
     return 0
   fi
+  echo "Argo CD skipped (Helm path default). Set SKIP_ARGOCD=false in workshop.env for GitOps CD tab."
+}
+
+detect_cluster_router_base() {
   local host=""
   host=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
   if [[ -z "${host}" ]]; then
     host=$(oc get route -n openshift-console -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
   fi
   if [[ -n "${host}" && "${host}" == console-openshift-console.* ]]; then
-    export CLUSTER_ROUTER_BASE="${host#console-openshift-console.}"
-    echo "Detected CLUSTER_ROUTER_BASE=${CLUSTER_ROUTER_BASE}"
-  elif [[ -z "${CLUSTER_ROUTER_BASE:-}" ]]; then
-    echo "Set CLUSTER_ROUTER_BASE in scripts/workshop.env (e.g. apps.cluster-name.example.com)" >&2
+    local detected="${host#console-openshift-console.}"
+    if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "${detected}" \
+      && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+      echo "Updating CLUSTER_ROUTER_BASE: ${CLUSTER_ROUTER_BASE} -> ${detected} (current cluster)"
+    fi
+    export CLUSTER_ROUTER_BASE="${detected}"
+    return 0
   fi
+  if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+    return 0
+  fi
+  echo "Set CLUSTER_ROUTER_BASE in scripts/workshop.env (e.g. apps.cluster-name.example.com)" >&2
 }
 
 require_oc() {
@@ -116,6 +123,34 @@ apply_rendered_dir() {
   while IFS= read -r -d '' file; do
     render_manifest "${file}" | oc apply -f -
   done < <(find "${dir}" -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | sort -z)
+}
+
+# Clear pending-install/upgrade Helm locks left by interrupted installs (API timeout, Ctrl+C).
+helm_unlock_release() {
+  local release="$1"
+  local namespace="$2"
+  local status last_deployed
+
+  command -v helm >/dev/null 2>&1 || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  if ! helm status "${release}" -n "${namespace}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  status=$(helm status "${release}" -n "${namespace}" -o json 2>/dev/null | jq -r '.info.status // empty')
+  case "${status}" in
+    pending-install | pending-upgrade | pending-rollback)
+      echo "Helm release ${release} is stuck in ${status} (often after API disconnect). Recovering..."
+      last_deployed=$(helm history "${release}" -n "${namespace}" -o json 2>/dev/null \
+        | jq -r '[.[] | select(.status == "deployed") | .revision] | last // empty')
+      if [[ -n "${last_deployed}" ]]; then
+        helm rollback "${release}" "${last_deployed}" -n "${namespace}" --wait --timeout 10m
+      else
+        echo "No deployed revision for ${release}; removing stuck release..." >&2
+        helm uninstall "${release}" -n "${namespace}" --wait --timeout 10m || true
+      fi
+      ;;
+  esac
 }
 
 wait_for_csv() {
@@ -154,15 +189,245 @@ resolve_rhdh_host() {
     || echo "redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
 }
 
+resolve_rhdh_deploy_name() {
+  if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    echo "redhat-developer-hub"
+  elif oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    echo "${RHDH_INSTANCE_NAME}"
+  else
+    echo "redhat-developer-hub"
+  fi
+}
+
+developer_hub_uses_plugins_pvc() {
+  local deploy_name="${1:-$(resolve_rhdh_deploy_name)}"
+  oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" -o json \
+    | jq -e '.spec.template.spec.volumes[]
+       | select(.name == "dynamic-plugins-root")
+       | .persistentVolumeClaim.claimName' >/dev/null 2>&1
+}
+
+clear_dynamic_plugins_install_lock() {
+  local pod
+  pod="$(oc get pod -n "${RHDH_NAMESPACE}" -l app.kubernetes.io/name=developer-hub \
+    -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null \
+    | awk '{print $1}')"
+  if [[ -n "${pod}" ]]; then
+    for path in \
+      /dynamic-plugins-root/install-dynamic-plugins.lock \
+      /dynamic-plugins-root/dynamic-plugins.lock \
+      /opt/app-root/src/dynamic-plugins-root/install-dynamic-plugins.lock \
+      /opt/app-root/src/dynamic-plugins-root/dynamic-plugins.lock; do
+      oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c install-dynamic-plugins -- \
+        rm -f "${path}" 2>/dev/null \
+        || oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c backstage-backend -- \
+          rm -f "${path}" 2>/dev/null \
+        || true
+    done
+  fi
+
+  if ! oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    echo "Cleared dynamic plugins install lock (if present)."
+    return 0
+  fi
+
+  local job_pod="workshop-plugins-lock-clear"
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=true >/dev/null 2>&1 || true
+  oc run "${job_pod}" -n "${RHDH_NAMESPACE}" --restart=Never \
+    --image=registry.redhat.io/ubi9/ubi-minimal \
+    --overrides='{"spec":{"containers":[{"name":"clear","image":"registry.redhat.io/ubi9/ubi-minimal","command":["sh","-c","rm -fv /mnt/install-dynamic-plugins.lock /mnt/dynamic-plugins.lock; echo cleared"],"volumeMounts":[{"name":"pvc","mountPath":"/mnt"}]}],"volumes":[{"name":"pvc","persistentVolumeClaim":{"claimName":"dynamic-plugins-root"}}]}}' \
+    -- sleep 30 >/dev/null
+
+  local i
+  for i in $(seq 1 30); do
+    if oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null | grep -q cleared; then
+      break
+    fi
+    sleep 2
+  done
+  oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null || true
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  echo "Cleared dynamic plugins install lock (if present)."
+}
+
+wait_for_developer_hub_pods_gone() {
+  local i count
+  for i in $(seq 1 60); do
+    count="$(oc get pod -n "${RHDH_NAMESPACE}" -l app.kubernetes.io/name=developer-hub \
+      --no-headers 2>/dev/null | wc -l | tr -d ' ')"
+    [[ "${count}" == "0" ]] && return 0
+    sleep 5
+  done
+  return 1
+}
+
+safe_rollout_developer_hub() {
+  local deploy_name="${1:-$(resolve_rhdh_deploy_name)}"
+  local timeout="${2:-900s}"
+  local replicas
+
+  replicas="$(oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" -o jsonpath='{.spec.replicas}')"
+  if [[ -z "${replicas}" || "${replicas}" == "0" ]]; then
+    replicas=1
+  fi
+
+  echo "Scaling ${deploy_name} to 0 to release dynamic-plugins PVC and avoid lock contention..."
+  oc scale "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --replicas=0
+  wait_for_developer_hub_pods_gone || oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout=300s || true
+
+  if developer_hub_uses_plugins_pvc "${deploy_name}" \
+    || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    clear_dynamic_plugins_install_lock
+  fi
+
+  echo "Scaling ${deploy_name} back to ${replicas} replica(s)..."
+  oc scale "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --replicas="${replicas}"
+  oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout="${timeout}"
+}
+
+load_mcp_token_from_cluster() {
+  local token app_config
+
+  if oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    token="$(oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" \
+      -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+    token="${token#Bearer }"
+    if [[ -n "${token}" && "${token}" != "changeme" ]]; then
+      echo "${token}"
+      return 0
+    fi
+  fi
+
+  if oc get configmap redhat-developer-hub-app-config -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    app_config="$(oc get configmap redhat-developer-hub-app-config -n "${RHDH_NAMESPACE}" \
+      -o jsonpath='{.data.app-config\.yaml}' 2>/dev/null || true)"
+  elif oc get configmap app-config-rhdh -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    app_config="$(oc get configmap app-config-rhdh -n "${RHDH_NAMESPACE}" \
+      -o jsonpath='{.data.app-config-rhdh\.yaml}' 2>/dev/null || true)"
+  fi
+
+  if [[ -n "${app_config}" ]]; then
+    token="$(python3 - "${app_config}" <<'PY'
+import sys, yaml
+config = yaml.safe_load(sys.argv[1]) or {}
+for entry in config.get("backend", {}).get("auth", {}).get("externalAccess", []) or []:
+    if entry.get("type") != "static":
+        continue
+    options = entry.get("options") or {}
+    if options.get("subject") == "mcp-clients" and options.get("token"):
+        print(options["token"])
+        break
+PY
+)"
+    if [[ -n "${token}" && "${token}" != "changeme" ]]; then
+      echo "${token}"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 ensure_mcp_token() {
   if [[ -n "${MCP_TOKEN:-}" && "${MCP_TOKEN}" != "changeme" ]]; then
     export MCP_TOKEN
     return 0
   fi
+
+  if MCP_TOKEN="$(load_mcp_token_from_cluster)"; then
+    export MCP_TOKEN
+    echo "Using existing MCP_TOKEN from cluster (add to scripts/workshop.env to keep it stable across re-runs):"
+    echo "  export MCP_TOKEN=\"${MCP_TOKEN}\""
+    return 0
+  fi
+
   MCP_TOKEN="$(openssl rand -base64 24 | tr -d '\n/+= ' | head -c 32)"
   export MCP_TOKEN
   echo "Generated MCP_TOKEN (add to scripts/workshop.env to keep it stable across re-runs):"
   echo "  export MCP_TOKEN=\"${MCP_TOKEN}\""
+}
+
+sync_mcp_token_in_app_config() {
+  ensure_mcp_token
+
+  render_manifest "${MANIFESTS_DIR}/developer-hub/lightspeed-mcp-token-secret.yaml" | oc apply -f -
+
+  local cm_key cm_name tmp merged
+  if oc get configmap redhat-developer-hub-app-config -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    cm_name="redhat-developer-hub-app-config"
+    cm_key="app-config.yaml"
+  elif oc get configmap app-config-rhdh -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    cm_name="app-config-rhdh"
+    cm_key="app-config-rhdh.yaml"
+  else
+    echo "Developer Hub app-config ConfigMap not found; MCP secret applied only." >&2
+    return 0
+  fi
+
+  tmp="$(mktemp)"
+  oc get configmap "${cm_name}" -n "${RHDH_NAMESPACE}" -o json \
+    | jq -r --arg key "${cm_key}" '.data[$key]' >"${tmp}"
+
+  local sync_status=0
+  python3 - "${tmp}" "${MCP_TOKEN}" <<'PY' || sync_status=$?
+import sys, yaml
+
+path, token = sys.argv[1], sys.argv[2]
+with open(path, encoding="utf-8") as handle:
+    config = yaml.safe_load(handle) or {}
+
+external = config.setdefault("backend", {}).setdefault("auth", {}).setdefault("externalAccess", [])
+updated = False
+for entry in external:
+    if entry.get("type") != "static":
+        continue
+    options = entry.setdefault("options", {})
+    if options.get("subject") == "mcp-clients":
+        if options.get("token") != token:
+            options["token"] = token
+            updated = True
+        break
+else:
+    external.append(
+        {
+            "type": "static",
+            "options": {"token": token, "subject": "mcp-clients"},
+        }
+    )
+    updated = True
+
+lightspeed = config.setdefault("lightspeed", {})
+servers = lightspeed.setdefault("mcpServers", [])
+for server in servers:
+    if server.get("name") == "mcp::backstage":
+        bearer = f"Bearer {token}"
+        if server.get("token") != bearer:
+            server["token"] = bearer
+            updated = True
+        break
+else:
+    servers.append({"name": "mcp::backstage", "token": f"Bearer {token}"})
+    updated = True
+
+if not updated:
+    sys.exit(2)
+
+with open(path, "w", encoding="utf-8") as handle:
+    yaml.dump(config, handle, default_flow_style=False, sort_keys=False, allow_unicode=True)
+PY
+
+  if [[ "${sync_status}" -eq 0 ]]; then
+    oc create configmap "${cm_name}" -n "${RHDH_NAMESPACE}" \
+      --from-file="${cm_key}=${tmp}" \
+      --dry-run=client -o yaml | oc apply -f -
+    echo "Synced MCP token in ${cm_name}."
+  elif [[ "${sync_status}" -eq 2 ]]; then
+    echo "MCP token already synced in ${cm_name}."
+  else
+    rm -f "${tmp}"
+    return 1
+  fi
+  rm -f "${tmp}"
 }
 
 merge_mcp_into_app_config() {
@@ -238,173 +503,71 @@ wait_keycloak_http_ready() {
   return 1
 }
 
-# Returns 0 when ready, 1 when a repair was applied, 2 when repair is needed (dry-run).
-ensure_deployment_running() {
-  local deploy_name="${1}"
-  local namespace="${2}"
-  local desired_replicas="${3:-1}"
-  local timeout="${4:-300}"
-  local dry_run="${5:-false}"
-
-  if ! oc get deployment "${deploy_name}" -n "${namespace}" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  local replicas ready
-  replicas=$(oc get deployment "${deploy_name}" -n "${namespace}" -o jsonpath='{.spec.replicas}')
-  ready=$(oc get deployment "${deploy_name}" -n "${namespace}" \
-    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-  ready="${ready:-0}"
-
-  if [[ "${replicas}" -ge "${desired_replicas}" && "${ready}" -ge "${desired_replicas}" ]]; then
-    echo "OK   deployment/${deploy_name} (${namespace}) ready=${ready}/${replicas}"
-    return 0
-  fi
-
-  if [[ "${dry_run}" == "true" ]]; then
-    echo "DOWN deployment/${deploy_name} (${namespace}) ready=${ready}/${replicas} -> would scale to ${desired_replicas}"
-    return 2
-  fi
-
-  echo "Scaling deployment/${deploy_name} in ${namespace} to ${desired_replicas} (was ready=${ready}/${replicas})..."
-  oc scale "deployment/${deploy_name}" --replicas="${desired_replicas}" -n "${namespace}"
-  oc rollout status "deployment/${deploy_name}" -n "${namespace}" --timeout="${timeout}s"
-  echo "OK   deployment/${deploy_name} (${namespace}) scaled and ready"
-  return 1
-}
-
-# Returns 0 when ready, 1 when a repair was applied, 2 when repair is needed (dry-run).
-ensure_statefulset_running() {
-  local sts_name="${1}"
-  local namespace="${2}"
-  local desired_replicas="${3:-1}"
-  local timeout="${4:-300}"
-  local dry_run="${5:-false}"
-
-  if ! oc get statefulset "${sts_name}" -n "${namespace}" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  local replicas ready
-  replicas=$(oc get statefulset "${sts_name}" -n "${namespace}" -o jsonpath='{.spec.replicas}')
-  ready=$(oc get statefulset "${sts_name}" -n "${namespace}" \
-    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-  ready="${ready:-0}"
-
-  if [[ "${replicas}" -ge "${desired_replicas}" && "${ready}" -ge "${desired_replicas}" ]]; then
-    echo "OK   statefulset/${sts_name} (${namespace}) ready=${ready}/${replicas}"
-    return 0
-  fi
-
-  if [[ "${dry_run}" == "true" ]]; then
-    echo "DOWN statefulset/${sts_name} (${namespace}) ready=${ready}/${replicas} -> would scale to ${desired_replicas}"
-    return 2
-  fi
-
-  echo "Scaling statefulset/${sts_name} in ${namespace} to ${desired_replicas} (was ready=${ready}/${replicas})..."
-  oc scale "statefulset/${sts_name}" --replicas="${desired_replicas}" -n "${namespace}"
-  oc rollout status "statefulset/${sts_name}" -n "${namespace}" --timeout="${timeout}s"
-  echo "OK   statefulset/${sts_name} (${namespace}) scaled and ready"
-  return 1
-}
-
-ensure_developer_hub_running() {
-  local dry_run="${1:-false}"
-  local deploy_name=""
-
-  if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-    deploy_name="redhat-developer-hub"
-  elif oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-    deploy_name="${RHDH_INSTANCE_NAME}"
-  else
-    return 0
-  fi
-
-  ensure_deployment_running "${deploy_name}" "${RHDH_NAMESPACE}" 1 600 "${dry_run}"
-}
-
-ensure_all_workshop_instances() {
-  local dry_run="${1:-false}"
-  local check_only="${2:-false}"
-  local rc=0
-  local item status
-
-  require_oc
-  echo "Checking workshop instances (workshop=${WORKSHOP_NAMESPACE}, rhdh=${RHDH_NAMESPACE})..."
-
-  local workloads=(
-    "statefulset:${RHDH_NAMESPACE}:redhat-developer-hub-postgresql:1:300"
-    "deployment:${WORKSHOP_NAMESPACE}:keycloak:1:600"
-    "deployment:${WORKSHOP_NAMESPACE}:workshop-catalog-server:1:300"
-    "deployment:${WORKSHOP_NAMESPACE}:people-postgres:1:300"
-    "deployment:${WORKSHOP_NAMESPACE}:people-backend:1:600"
-    "deployment:${WORKSHOP_NAMESPACE}:people-frontend:1:300"
-    "deployment:${WORKSHOP_NAMESPACE}:aap-management-plugin-server:1:180"
-  )
-
-  for item in "${workloads[@]}"; do
-    IFS=':' read -r kind namespace name desired timeout <<<"${item}"
-    status=0
-    if [[ "${kind}" == "statefulset" ]]; then
-      ensure_statefulset_running "${name}" "${namespace}" "${desired}" "${timeout}" "${dry_run}" || status=$?
-    else
-      ensure_deployment_running "${name}" "${namespace}" "${desired}" "${timeout}" "${dry_run}" || status=$?
-    fi
-    if (( status > rc )); then
-      rc=${status}
-    fi
-  done
-
-  status=0
-  ensure_developer_hub_running "${dry_run}" || status=$?
-  if (( status > rc )); then
-    rc=${status}
-  fi
-
-  if [[ "${dry_run}" == "true" || "${check_only}" == "true" ]]; then
-    if [[ "${rc}" -eq 2 ]]; then
-      echo "Some instances are scaled down or not ready."
-      return 1
-    fi
-    echo "All checked instances are running."
-    return 0
-  fi
-
-  if [[ "${rc}" -ge 1 ]]; then
-    if oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
-      wait_keycloak_http_ready || true
-    fi
-    if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-      local ready
-      ready=$(oc get pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" \
-        -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
-      if [[ "${ready}" != "True" ]]; then
-        echo "Restarting Developer Hub pod after dependency recovery..."
-        oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
-        oc rollout status deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --timeout=600s 2>/dev/null || true
-      fi
-    fi
-  fi
-
-  echo "Workshop instance check complete."
-  return 0
-}
-
 ensure_keycloak_running() {
   if ! oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    echo "Keycloak is not deployed in ${WORKSHOP_NAMESPACE}."
+    echo "Deploying Keycloak (run ./scripts/bootstrap-workshop.sh for the full stack)..."
+    "${SCRIPTS_DIR}/setup-keycloak.sh"
     return 0
   fi
 
-  ensure_deployment_running keycloak "${WORKSHOP_NAMESPACE}" 1 600 false || true
+  local replicas ready
+  replicas=$(oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" -o jsonpath='{.spec.replicas}')
+  ready=$(oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+
+  if [[ "${replicas}" == "0" || "${ready}" != "1" ]]; then
+    echo "Ensuring Keycloak is running in ${WORKSHOP_NAMESPACE} (replicas=${replicas}, ready=${ready})..."
+    oc scale deployment/keycloak --replicas=1 -n "${WORKSHOP_NAMESPACE}"
+    oc rollout status deployment/keycloak -n "${WORKSHOP_NAMESPACE}" --timeout=600s
+  fi
+
   wait_keycloak_http_ready
 }
 
 ensure_rhdh_postgres() {
-  ensure_statefulset_running redhat-developer-hub-postgresql "${RHDH_NAMESPACE}" 1 300 false || true
+  if ! oc get statefulset redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local replicas ready
+  replicas=$(oc get statefulset redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" \
+    -o jsonpath='{.spec.replicas}')
+  ready=$(oc get statefulset redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+
+  if [[ "${replicas}" == "0" || "${ready}" != "1" ]]; then
+    echo "Ensuring RHDH PostgreSQL is running in ${RHDH_NAMESPACE}..."
+    oc scale statefulset/redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" --replicas=1
+    oc rollout status statefulset/redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" --timeout=300s
+  fi
 }
 
 ensure_catalog_server() {
-  ensure_deployment_running workshop-catalog-server "${WORKSHOP_NAMESPACE}" 1 300 false || true
+  if ! oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local replicas ready replica_failure
+  replicas=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.spec.replicas}')
+  ready=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  replica_failure=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \
+    -o jsonpath='{.status.conditions[?(@.type=="ReplicaFailure")].status}' 2>/dev/null || echo "False")
+
+  if [[ "${replica_failure}" == "True" ]] || [[ "${replicas}" == "0" || "${ready}" != "1" ]]; then
+    echo "Ensuring workshop catalog server is running in ${WORKSHOP_NAMESPACE}..."
+    if [[ "${replica_failure}" == "True" ]]; then
+      echo "Re-applying catalog server manifest (previous rollout failed)..."
+      render_manifest "${MANIFESTS_DIR}/developer-hub/catalog-server.yaml" | oc apply -f -
+    fi
+    oc scale deployment/workshop-catalog-server --replicas=1 -n "${WORKSHOP_NAMESPACE}"
+    if ! oc rollout status deployment/workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" --timeout=300s; then
+      echo "Catalog server rollout failed. Run ./scripts/configure-developer-hub-catalog.sh" >&2
+      return 1
+    fi
+  fi
 }
 
 ensure_workshop_platform() {
@@ -414,6 +577,30 @@ ensure_workshop_platform() {
   ensure_rhdh_postgres
   ensure_catalog_server
   echo "Workshop platform dependencies are ready."
+}
+
+developer_hub_installed() {
+  oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1 \
+    || oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1 \
+    || oc get backstage "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1
+}
+
+require_developer_hub() {
+  if developer_hub_installed; then
+    return 0
+  fi
+  cat <<EOF >&2
+Developer Hub is not installed in ${RHDH_NAMESPACE}.
+Install the workshop platform first:
+
+  ./scripts/bootstrap-workshop.sh
+
+Helm path (no operators):
+
+  export WORKSHOP_INSTALL_METHOD=helm
+  ./scripts/bootstrap-workshop.sh
+EOF
+  return 1
 }
 
 upsert_workshop_env() {

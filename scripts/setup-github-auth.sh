@@ -167,6 +167,7 @@ fi
 if [[ "${APPLY_CONFIG}" == "true" ]]; then
   require_oc
   ensure_workshop_platform
+  require_developer_hub
   # shellcheck disable=SC1091
   source "${WORKSHOP_ENV_FILE}"
   "${SCRIPTS_DIR}/setup-developer-hub-config.sh"

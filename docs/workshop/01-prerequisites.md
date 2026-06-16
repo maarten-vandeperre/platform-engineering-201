@@ -1,5 +1,7 @@
 # 1. Prerequisites
 
+> **Platform:** Steps below assume **OpenShift** and the `oc` CLI. The workshop is a **Backstage** workshop delivered with **Red Hat Developer Hub**; the same catalog, app-config, and plugin patterns apply to Community Backstage on vanilla Kubernetes — use `kubectl` where this guide says `oc`, and adapt Routes to Ingress or port-forwarding. See [TUTORIAL.md — Developer Hub and Backstage](TUTORIAL.md#developer-hub-and-backstage).
+
 ## Cluster access
 
 - OpenShift 4.x cluster with a dedicated namespace/project
@@ -27,10 +29,11 @@ Optional:
 
 ## Fork the repository
 
-Fork [platform-engineering-201](https://github.com/maarten-vandeperre/platform-engineering-201) to your GitHub organization and update:
+Fork [platform-engineering-201](https://github.com/maarten-vandeperre/platform-engineering-201) to your GitHub organization and update `scripts/workshop.env`:
 
-- `scripts/workshop.env` — git repo URL, GitHub org, `CLUSTER_ROUTER_BASE`
-- `manifests/gitops/catalog/entities/people-service.yaml` — `github.com/project-slug` annotation
+- `WORKSHOP_GIT_REPO` — clone URL of your fork
+- `WORKSHOP_GITHUB_ORG` / `WORKSHOP_GITHUB_REPO` — used for catalog annotations such as `github.com/project-slug` (rendered via `envsubst`; not hard-coded in YAML)
+- `CLUSTER_ROUTER_BASE` — your OpenShift apps domain
 
 ## GitHub token (required for scaffolder publish)
 

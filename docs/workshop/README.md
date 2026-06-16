@@ -2,6 +2,8 @@
 
 This workshop installs **Red Hat Developer Hub** on OpenShift, deploys a sample **Quarkus + PostgreSQL + React** application with GitOps, and connects catalog entities, OpenAPI, Technology Radar, Argo CD, GitHub Actions, Orchestrator, Egyptian theme, and an organization entity model.
 
+> **Backstage workshop:** RHDH is Red Hat’s supported distribution of [Backstage](https://backstage.io/). Treat this as a Backstage workshop — catalog, TechDocs, plugins, and scaffolder content work the same on Community Backstage. We use Developer Hub and OpenShift because this is a Red Hat workshop; on vanilla Kubernetes you can reuse the same concepts with `kubectl` instead of `oc` (see [TUTORIAL.md — Developer Hub and Backstage](TUTORIAL.md#developer-hub-and-backstage)).
+
 ## Primary tutorial
 
 **[TUTORIAL.md](TUTORIAL.md)** — complete outline from a clean sandbox to the current state: commands, what/why, pros/cons per step, verification, and links to every configuration file you can customize.
@@ -63,10 +65,12 @@ This runs the full sequence:
 | RHDH config | `setup-developer-hub-kubernetes.sh`, `setup-developer-hub-config.sh`, `configure-developer-hub-catalog.sh` |
 | Validate | `validate-workshop.sh` |
 
-**Helm path** (no operators):
+**Default (Helm, no operators):** `WORKSHOP_INSTALL_METHOD=helm` in `workshop.env.example` — just run `./scripts/bootstrap-workshop.sh`.
+
+**Operator path** (needs Subscription permission):
 
 ```bash
-export WORKSHOP_INSTALL_METHOD=helm
+export WORKSHOP_INSTALL_METHOD=operator
 ./scripts/bootstrap-workshop.sh
 ```
 
@@ -116,6 +120,8 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 | 7b | [06c-ansible-automation-platform](06c-ansible-automation-platform.md) | Optional AAP plugin (`/ansible`) |
 | 8 | [07-developer-hub-catalog](07-developer-hub-catalog.md) | Catalog, OpenAPI, Tech Radar |
 | 9 | [08-validation](08-validation.md) | Validation, e2e, troubleshooting |
+| 10 | [09-cleanup-after-demo](09-cleanup-after-demo.md) | Remove demo resources for a fresh start |
+| — | [patch-branch](patch-branch.md) | Upgrade an existing install after checking out a feature branch (e.g. Lightspeed + MCP) |
 
 ## What you will see in Developer Hub
 
@@ -144,6 +150,7 @@ Follow these if you prefer to run each phase yourself or if bootstrap fails part
 Workloads may be scaled to zero between sessions:
 
 ```bash
+./scripts/ensure-workshop-platform.sh
 ./scripts/repair-keycloak.sh
 ./scripts/repair-people-app.sh
 ./scripts/repair-developer-hub.sh
@@ -156,6 +163,26 @@ Workloads may be scaled to zero between sessions:
 ./scripts/setup-developer-hub-aap.sh          # optional; AAP_ENABLED + AAP_* + RH_REGISTRY_*
 ./scripts/configure-aap-workshop-env.sh       # recommended; see 06c-ansible-automation-platform.md
 ./scripts/create-github-oauth-app.sh --oauth-app   # CI tab Authorize GitHub
+```
+
+## Cleanup after demo
+
+When the demo is finished and you want an empty namespace for the next run:
+
+```bash
+./scripts/cleanup-workshop.sh --dry-run
+./scripts/cleanup-workshop.sh --yes
+```
+
+See [09-cleanup-after-demo](09-cleanup-after-demo.md).
+
+## Upgrade after checking out a feature branch
+
+Already bootstrapped on the base branch and switched to e.g. Lightspeed + MCP? **Do not re-run bootstrap** — see **[patch-branch.md](patch-branch.md)**.
+
+```bash
+# Edit scripts/workshop.env (LIGHTSPEED_ENABLED, OPENAI_API_KEY, …)
+./scripts/setup-developer-hub-config.sh
 ```
 
 ## Sample application
