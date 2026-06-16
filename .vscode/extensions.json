@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "redhat.java",
+    "vscjava.vscode-maven",
+    "redhat.vscode-openshift-connector",
+    "redhat.vscode-yaml",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode"
+  ]
+}
