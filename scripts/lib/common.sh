@@ -55,6 +55,8 @@ export LIGHTSPEED_VLLM_MAX_TOKENS
 export LIGHTSPEED_ENABLE_OPENAI
 export LIGHTSPEED_SAFETY_GUARD
 export MCP_TOKEN
+export AAP_ENABLED
+export AAP_MANAGEMENT_ENABLED
 
 # Argo CD is optional. Helm path skips it unless SKIP_ARGOCD=false (opt-in CD tab).
 # Operator path installs Argo CD unless SKIP_ARGOCD=true.
@@ -120,9 +122,9 @@ render_manifest() {
 apply_rendered_dir() {
   local dir="$1"
   local file
-  while IFS= read -r -d '' file; do
+  find "${dir}" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort | while IFS= read -r file; do
     render_manifest "${file}" | oc apply -f -
-  done < <(find "${dir}" -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | sort -z)
+  done
 }
 
 # Clear pending-install/upgrade Helm locks left by interrupted installs (API timeout, Ctrl+C).
@@ -501,6 +503,169 @@ wait_keycloak_http_ready() {
   done
   echo "Keycloak is not reachable. Run ./scripts/repair-keycloak.sh" >&2
   return 1
+}
+
+# Returns 0 when ready, 1 when a repair was applied, 2 when repair is needed (dry-run).
+ensure_deployment_running() {
+  local deploy_name="${1}"
+  local namespace="${2}"
+  local desired_replicas="${3:-1}"
+  local timeout="${4:-300}"
+  local dry_run="${5:-false}"
+
+  if ! oc get deployment "${deploy_name}" -n "${namespace}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local replicas ready
+  replicas=$(oc get deployment "${deploy_name}" -n "${namespace}" -o jsonpath='{.spec.replicas}')
+  ready=$(oc get deployment "${deploy_name}" -n "${namespace}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  ready="${ready:-0}"
+
+  if [[ "${replicas}" -ge "${desired_replicas}" && "${ready}" -ge "${desired_replicas}" ]]; then
+    echo "OK   deployment/${deploy_name} (${namespace}) ready=${ready}/${replicas}"
+    return 0
+  fi
+
+  if [[ "${dry_run}" == "true" ]]; then
+    echo "DOWN deployment/${deploy_name} (${namespace}) ready=${ready}/${replicas} -> would scale to ${desired_replicas}"
+    return 2
+  fi
+
+  echo "Scaling deployment/${deploy_name} in ${namespace} to ${desired_replicas} (was ready=${ready}/${replicas})..."
+  oc scale "deployment/${deploy_name}" --replicas="${desired_replicas}" -n "${namespace}"
+  if ! oc rollout status "deployment/${deploy_name}" -n "${namespace}" --timeout="${timeout}s"; then
+    echo "WARN deployment/${deploy_name} (${namespace}) rollout did not finish in ${timeout}s" >&2
+    return 2
+  fi
+  echo "OK   deployment/${deploy_name} (${namespace}) scaled and ready"
+  return 1
+}
+
+# Returns 0 when ready, 1 when a repair was applied, 2 when repair is needed (dry-run).
+ensure_statefulset_running() {
+  local sts_name="${1}"
+  local namespace="${2}"
+  local desired_replicas="${3:-1}"
+  local timeout="${4:-300}"
+  local dry_run="${5:-false}"
+
+  if ! oc get statefulset "${sts_name}" -n "${namespace}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local replicas ready
+  replicas=$(oc get statefulset "${sts_name}" -n "${namespace}" -o jsonpath='{.spec.replicas}')
+  ready=$(oc get statefulset "${sts_name}" -n "${namespace}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  ready="${ready:-0}"
+
+  if [[ "${replicas}" -ge "${desired_replicas}" && "${ready}" -ge "${desired_replicas}" ]]; then
+    echo "OK   statefulset/${sts_name} (${namespace}) ready=${ready}/${replicas}"
+    return 0
+  fi
+
+  if [[ "${dry_run}" == "true" ]]; then
+    echo "DOWN statefulset/${sts_name} (${namespace}) ready=${ready}/${replicas} -> would scale to ${desired_replicas}"
+    return 2
+  fi
+
+  echo "Scaling statefulset/${sts_name} in ${namespace} to ${desired_replicas} (was ready=${ready}/${replicas})..."
+  oc scale "statefulset/${sts_name}" --replicas="${desired_replicas}" -n "${namespace}"
+  if ! oc rollout status "statefulset/${sts_name}" -n "${namespace}" --timeout="${timeout}s"; then
+    echo "WARN statefulset/${sts_name} (${namespace}) rollout did not finish in ${timeout}s" >&2
+    return 2
+  fi
+  echo "OK   statefulset/${sts_name} (${namespace}) scaled and ready"
+  return 1
+}
+
+ensure_developer_hub_running() {
+  local dry_run="${1:-false}"
+  local deploy_name=""
+
+  if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    deploy_name="redhat-developer-hub"
+  elif oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    deploy_name="${RHDH_INSTANCE_NAME}"
+  else
+    return 0
+  fi
+
+  ensure_deployment_running "${deploy_name}" "${RHDH_NAMESPACE}" 1 600 "${dry_run}"
+}
+
+ensure_all_workshop_instances() {
+  local dry_run="${1:-false}"
+  local check_only="${2:-false}"
+  local rc=0
+  local item status
+
+  require_oc
+  echo "Checking workshop instances (workshop=${WORKSHOP_NAMESPACE}, rhdh=${RHDH_NAMESPACE})..."
+
+  local workloads=(
+    "statefulset:${RHDH_NAMESPACE}:redhat-developer-hub-postgresql:1:300"
+    "deployment:${WORKSHOP_NAMESPACE}:keycloak:1:600"
+    "deployment:${WORKSHOP_NAMESPACE}:workshop-catalog-server:1:300"
+    "deployment:${WORKSHOP_NAMESPACE}:people-postgres:1:300"
+    "deployment:${WORKSHOP_NAMESPACE}:people-backend:1:600"
+    "deployment:${WORKSHOP_NAMESPACE}:people-frontend:1:300"
+  )
+
+  if [[ "${AAP_MANAGEMENT_ENABLED:-false}" == "true" \
+    || "${AAP_MANAGEMENT_ENABLED:-false}" == "1" \
+    || "${AAP_MANAGEMENT_ENABLED:-false}" == "yes" ]]; then
+    workloads+=("deployment:${WORKSHOP_NAMESPACE}:aap-management-plugin-server:1:180")
+  fi
+
+  for item in "${workloads[@]}"; do
+    IFS=':' read -r kind namespace name desired timeout <<<"${item}"
+    status=0
+    if [[ "${kind}" == "statefulset" ]]; then
+      ensure_statefulset_running "${name}" "${namespace}" "${desired}" "${timeout}" "${dry_run}" || status=$?
+    else
+      ensure_deployment_running "${name}" "${namespace}" "${desired}" "${timeout}" "${dry_run}" || status=$?
+    fi
+    if (( status > rc )); then
+      rc=${status}
+    fi
+  done
+
+  status=0
+  ensure_developer_hub_running "${dry_run}" || status=$?
+  if (( status > rc )); then
+    rc=${status}
+  fi
+
+  if [[ "${dry_run}" == "true" || "${check_only}" == "true" ]]; then
+    if [[ "${rc}" -eq 2 ]]; then
+      echo "Some instances are scaled down or not ready."
+      return 1
+    fi
+    echo "All checked instances are running."
+    return 0
+  fi
+
+  if [[ "${rc}" -ge 1 ]]; then
+    if oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+      wait_keycloak_http_ready || true
+    fi
+    if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+      local ready
+      ready=$(oc get pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" \
+        -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
+      if [[ "${ready}" != "True" ]]; then
+        echo "Restarting Developer Hub pod after dependency recovery..."
+        oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
+        oc rollout status deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --timeout=600s 2>/dev/null || true
+      fi
+    fi
+  fi
+
+  echo "Workshop instance check complete."
+  return 0
 }
 
 ensure_keycloak_running() {

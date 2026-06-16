@@ -1,0 +1,11 @@
+workshop.env KEYCLOAK_URL and OIDC_AUTH_SERVER_URL still have hardcoded CLUSTER_ROUTER_BASE in the url, fix this as well for workshop.env.example
+
+changed:
+    oc login
+    CLUSTER_ROUTER_BASE
+    AAP
+    LIGHTSPEED
+
+mac versus linux
+
+20 - 30 min

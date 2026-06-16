@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec with bash when invoked as `sh script.sh` (macOS /bin/sh is bash in POSIX mode).
+if [[ -z "${BASH_VERSION:-}" ]] || { shopt -oq posix 2>/dev/null; }; then
+  exec bash "$0" "$@"
+fi
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
