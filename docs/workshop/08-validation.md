@@ -129,6 +129,7 @@ REPAIR_RESET_POSTGRES_DATA=true ./scripts/repair-people-app.sh
 | `install-dynamic-plugins` stuck on `Waiting for lock release` | `./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock` (removes stale lock on PVC; see [06-install-developer-hub.md](06-install-developer-hub.md#script-options)) |
 | GitHub Actions Authorize popup 404 (`client_id=changeme`) | `./scripts/create-github-oauth-app.sh --oauth-app` |
 | GitHub Actions "Unknown auth provider github" | `./scripts/create-github-oauth-app.sh --oauth-app` then `./scripts/setup-developer-hub-config.sh` |
+| GitHub Authorize popup **Invalid Redirect URI** | Add the Developer Hub callback URL to your GitHub OAuth App (see below); common when reusing an app from another namespace or cluster |
 | Lost OAuth client secret | Regenerate in GitHub app settings, update `workshop.env`, run `./scripts/setup-github-auth.sh --oauth-only` |
 | Developer Hub login 500 (`ECONNREFUSED :5432`) | `./scripts/repair-developer-hub.sh` |
 | Catalog entity missing | `./scripts/configure-developer-hub-catalog.sh` |

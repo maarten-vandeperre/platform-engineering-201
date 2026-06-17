@@ -125,6 +125,18 @@ source scripts/workshop.env
 
 Use `./scripts/create-github-oauth-app.sh` only for **first-time setup** or when you need **new** credentials. Re-running `--oauth-app` opens the registration form again; paste your existing Client ID and secret instead of creating a duplicate app.
 
+If you **reuse** an OAuth App from another namespace or cluster, update its **Authorization callback URL** in GitHub to match your current Developer Hub route:
+
+```bash
+source scripts/workshop.env
+RHDH_HOST=$(oc get route redhat-developer-hub -n "${RHDH_NAMESPACE}" -o jsonpath='{.spec.host}')
+echo "https://${RHDH_HOST}/api/auth/github/handler/frame"
+```
+
+Open `https://github.com/settings/applications/<client_id>` (or your org's OAuth Apps settings), add that URL, then run `./scripts/setup-github-auth.sh --oauth-only`.
+
+If GitHub shows **Invalid Redirect URI**, the callback URL registered on the OAuth App does not match the URL above — fix it in GitHub; no cluster change is required when `app.baseUrl` already matches the route.
+
 If you lost the client secret, generate a new one on the [OAuth App settings page](https://github.com/settings/developers), update `AUTH_GITHUB_CLIENT_SECRET` in `workshop.env`, then run `./scripts/setup-github-auth.sh --oauth-only`.
 
 ## Namespace and cluster domain

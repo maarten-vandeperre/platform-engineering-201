@@ -91,7 +91,21 @@ configure_oauth() {
     return 1
   fi
 
+  local rhdh_host callback_url app_settings_url
+  rhdh_host="$(resolve_rhdh_host)"
+  callback_url="https://${rhdh_host}/api/auth/github/handler/frame"
+  app_settings_url="https://github.com/settings/applications/${AUTH_GITHUB_CLIENT_ID}"
+
   echo "GitHub OAuth credentials found (client ID ${AUTH_GITHUB_CLIENT_ID})."
+  echo ""
+  echo "Authorization callback URL (must be registered on the GitHub OAuth App):"
+  echo "  ${callback_url}"
+  echo ""
+  echo "GitHub OAuth App settings:"
+  echo "  ${app_settings_url}"
+  echo ""
+  echo "If Authorize GitHub shows 'Invalid Redirect URI', add the callback URL above in GitHub."
+  echo "Reusing an app from another namespace/cluster requires updating the callback URL there."
   return 0
 }
 
