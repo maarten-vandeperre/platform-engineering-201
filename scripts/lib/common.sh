@@ -1064,7 +1064,7 @@ wait_for_route_ready() {
   local timeout="${3:-900}"
   local path="${4:-/}"
   local url attempt=0 code interval=10 progress_interval=60
-  local start now elapsed last_progress body_file
+  local start now elapsed last_progress body_file=""
 
   command -v curl >/dev/null 2>&1 || {
     echo "curl is required for route health checks" >&2
@@ -1078,7 +1078,8 @@ wait_for_route_ready() {
 
   url="https://${host}${path}"
   body_file="$(mktemp)"
-  trap 'rm -f "${body_file}"' RETURN
+  # Embed path at trap definition time — RETURN runs after locals are torn down under set -u.
+  trap "rm -f '${body_file}'" RETURN
 
   echo "Waiting for ${label} at ${url} (up to $(( timeout / 60 )) min)..."
   start=$(date +%s)
