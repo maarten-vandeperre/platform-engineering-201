@@ -495,7 +495,8 @@ deployment_rollout_progress_line() {
   local deploy_name="$1"
   local namespace="$2"
   local label_selector="$3"
-  local spec_replicas ready_replicas pod_line init_active
+  local rollout_kind="${4:-}"
+  local spec_replicas ready_replicas pod_line init_active init_hint
 
   spec_replicas="$(oc get deployment "${deploy_name}" -n "${namespace}" \
     -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "?")"
@@ -514,7 +515,15 @@ deployment_rollout_progress_line() {
     -o json 2>/dev/null \
     | jq -r '[.items[-1].status.initContainerStatuses[]? | select(.state.running == null and .state.terminated == null) | .name] | join(", ")' 2>/dev/null || true)"
   if [[ -n "${init_active}" ]]; then
-    echo "Still waiting — ${pod_line} (init: ${init_active}; ${ready_replicas}/${spec_replicas} ready)"
+    init_hint=""
+    if [[ "${rollout_kind}" == "developer-hub" ]]; then
+      init_hint="$(developer_hub_active_init_hint "${init_active}")"
+    fi
+    if [[ -n "${init_hint}" ]]; then
+      echo "Still waiting — ${pod_line} (init: ${init_active}, ${init_hint}; ${ready_replicas}/${spec_replicas} ready)"
+    else
+      echo "Still waiting — ${pod_line} (init: ${init_active}; ${ready_replicas}/${spec_replicas} ready)"
+    fi
   else
     echo "Still waiting — ${pod_line} (${ready_replicas}/${spec_replicas} ready)"
   fi
@@ -603,9 +612,15 @@ wait_for_deployment_rollout() {
   local timeout_spec="${3:-600s}"
   local hint="${4:-Startup can take several minutes on sandbox clusters.}"
   local label_selector="${5:-}"
+  local rollout_kind="${6:-}"
 
   local timeout_secs interval=15 progress_interval=30
   local start now elapsed last_progress fatal_reason
+
+  if [[ "${rollout_kind}" == "developer-hub" ]]; then
+    # shellcheck disable=SC1091
+    source "${LIB_DIR}/developer-hub-dynamic-plugins.sh"
+  fi
 
   timeout_secs="$(rollout_timeout_to_seconds "${timeout_spec}")"
   if [[ -z "${label_selector}" ]]; then
@@ -650,6 +665,9 @@ wait_for_deployment_rollout() {
 
     if [[ "${spec_replicas}" -gt 0 && "${ready_replicas}" -ge "${spec_replicas}" \
       && "${updated_replicas}" -ge "${spec_replicas}" && "${unavailable}" == "0" ]]; then
+      if [[ "${rollout_kind}" == "developer-hub" ]]; then
+        mark_developer_hub_plugins_on_pvc
+      fi
       echo "Deployment/${deploy_name} is ready (${ready_replicas}/${spec_replicas} replicas)."
       return 0
     fi
@@ -674,7 +692,7 @@ wait_for_deployment_rollout() {
     fi
 
     if (( now - last_progress >= progress_interval )); then
-      deployment_rollout_progress_line "${deploy_name}" "${namespace}" "${label_selector}"
+      deployment_rollout_progress_line "${deploy_name}" "${namespace}" "${label_selector}" "${rollout_kind}"
       last_progress="${now}"
     fi
 
@@ -685,19 +703,17 @@ wait_for_deployment_rollout() {
 wait_for_developer_hub_rollout() {
   local deploy_name="${1:-$(resolve_rhdh_deploy_name)}"
   local timeout_spec="${2:-}"
-  local hint="Dynamic plugins and sidecars can take 10–15 minutes on sandbox clusters — this is normal."
+  local hint
 
   # shellcheck disable=SC1091
   source "${LIB_DIR}/developer-hub-dynamic-plugins.sh"
   if [[ -z "${timeout_spec}" ]]; then
     timeout_spec="$(rollout_timeout_for_config)"
   fi
-  if is_aap_enabled; then
-    hint="Ansible dynamic plugins are downloading — first install can take 15–30 minutes on sandbox."
-  fi
+  hint="$(developer_hub_rollout_hint)"
 
   wait_for_deployment_rollout "${deploy_name}" "${RHDH_NAMESPACE}" "${timeout_spec}" "${hint}" \
-    "app.kubernetes.io/name=developer-hub"
+    "app.kubernetes.io/name=developer-hub" "developer-hub"
 }
 
 safe_rollout_developer_hub() {

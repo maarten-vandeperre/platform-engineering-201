@@ -53,6 +53,112 @@ rollout_timeout_for_config() {
   fi
 }
 
+# Session cache: avoid repeated PVC probes during one bootstrap run.
+_DEVELOPER_HUB_PLUGINS_ON_PVC="${_DEVELOPER_HUB_PLUGINS_ON_PVC:-}"
+
+dynamic_plugins_pvc_exists() {
+  oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1
+}
+
+# True when dynamic-plugins-root has plugin content and no install lock (PVC or running pod).
+developer_hub_plugins_on_pvc() {
+  local pod mount entries lock_present
+
+  if [[ "${_DEVELOPER_HUB_PLUGINS_ON_PVC}" == "true" ]]; then
+    return 0
+  fi
+  if [[ "${_DEVELOPER_HUB_PLUGINS_ON_PVC}" == "false" ]]; then
+    return 1
+  fi
+
+  if ! dynamic_plugins_pvc_exists; then
+    _DEVELOPER_HUB_PLUGINS_ON_PVC=false
+    return 1
+  fi
+
+  pod="$(oc get pod -n "${RHDH_NAMESPACE}" -l app.kubernetes.io/name=developer-hub \
+    -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null \
+    | awk '{print $1}')"
+  if [[ -n "${pod}" ]]; then
+    for mount in /dynamic-plugins-root /opt/app-root/src/dynamic-plugins-root; do
+      lock_present="$(oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c backstage-backend -- \
+        sh -c "test -f ${mount}/install-dynamic-plugins.lock && echo yes || echo no" 2>/dev/null || true)"
+      if [[ "${lock_present}" == "yes" ]]; then
+        continue
+      fi
+      entries="$(oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c backstage-backend -- \
+        sh -c "ls -A ${mount} 2>/dev/null \
+          | grep -vE '^(install-dynamic-plugins\\.lock|dynamic-plugins\\.lock)$' \
+          | head -1" 2>/dev/null || true)"
+      if [[ -n "${entries}" ]]; then
+        _DEVELOPER_HUB_PLUGINS_ON_PVC=true
+        return 0
+      fi
+    done
+    _DEVELOPER_HUB_PLUGINS_ON_PVC=false
+    return 1
+  fi
+
+  local job_pod="workshop-plugins-pvc-probe"
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=true >/dev/null 2>&1 || true
+  oc run "${job_pod}" -n "${RHDH_NAMESPACE}" --restart=Never \
+    --image=registry.redhat.io/ubi9/ubi-minimal \
+    --overrides='{"spec":{"containers":[{"name":"probe","image":"registry.redhat.io/ubi9/ubi-minimal","command":["sh","-c","if test -f /mnt/install-dynamic-plugins.lock || test -f /mnt/dynamic-plugins.lock; then echo locked; elif ls -A /mnt 2>/dev/null | grep -qvE \"^(install-dynamic-plugins\\.lock|dynamic-plugins\\.lock)$\"; then echo populated; else echo empty; fi"],"volumeMounts":[{"name":"pvc","mountPath":"/mnt"}]}],"volumes":[{"name":"pvc","persistentVolumeClaim":{"claimName":"dynamic-plugins-root"}}]}}' \
+    -- sleep 30 >/dev/null
+
+  local i probe_result=""
+  for i in $(seq 1 15); do
+    probe_result="$(oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null | tail -1 || true)"
+    case "${probe_result}" in
+      populated | locked | empty) break ;;
+    esac
+    sleep 1
+  done
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+
+  if [[ "${probe_result}" == "populated" ]]; then
+    _DEVELOPER_HUB_PLUGINS_ON_PVC=true
+    return 0
+  fi
+  _DEVELOPER_HUB_PLUGINS_ON_PVC=false
+  return 1
+}
+
+mark_developer_hub_plugins_on_pvc() {
+  _DEVELOPER_HUB_PLUGINS_ON_PVC=true
+}
+
+developer_hub_rollout_hint() {
+  if is_aap_enabled && ! developer_hub_plugins_on_pvc; then
+    echo "Ansible dynamic plugins are downloading — first install can take 15–30 minutes on sandbox."
+    return 0
+  fi
+  if is_lightspeed_enabled; then
+    echo "Rolling out Developer Hub (Lightspeed sidecars and init containers may take a few minutes on sandbox)..."
+    return 0
+  fi
+  echo "Rolling out Developer Hub (sidecars may take a few minutes on sandbox)..."
+}
+
+developer_hub_active_init_hint() {
+  local init_names="${1:-}"
+  [[ -n "${init_names}" ]] || return 0
+
+  if [[ "${init_names}" == *"install-dynamic-plugins"* ]]; then
+    if is_aap_enabled && ! developer_hub_plugins_on_pvc; then
+      echo "downloading Ansible plugins from registry.redhat.io"
+      return 0
+    fi
+    echo "installing or verifying dynamic plugins"
+    return 0
+  fi
+  if [[ "${init_names}" == *"init-rag-data"* ]]; then
+    echo "initializing Lightspeed documentation index"
+    return 0
+  fi
+  return 0
+}
+
 ensure_aap_management_plugin_build() {
   local integrity_file="${SCRIPTS_DIR}/../custom-plugins/aap-management/.build/integrity.env"
   if [[ ! -f "${integrity_file}" ]]; then
