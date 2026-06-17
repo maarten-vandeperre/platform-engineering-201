@@ -1078,8 +1078,6 @@ wait_for_route_ready() {
 
   url="https://${host}${path}"
   body_file="$(mktemp)"
-  # Embed path at trap definition time — RETURN runs after locals are torn down under set -u.
-  trap "rm -f '${body_file}'" RETURN
 
   echo "Waiting for ${label} at ${url} (up to $(( timeout / 60 )) min)..."
   start=$(date +%s)
@@ -1091,6 +1089,7 @@ wait_for_route_ready() {
 
     code=$(curl -sk -o "${body_file}" -w "%{http_code}" "${url}" 2>/dev/null || echo "000")
     if route_http_is_ready "${code}" "${body_file}"; then
+      rm -f "${body_file}"
       echo "${label} is reachable (HTTP ${code})."
       return 0
     fi
@@ -1102,6 +1101,7 @@ wait_for_route_ready() {
         echo "  oc get route,svc,endpoints -n ${RHDH_NAMESPACE:-${WORKSHOP_NAMESPACE}}" >&2
         echo "  oc get pod -n ${RHDH_NAMESPACE:-${WORKSHOP_NAMESPACE}} -l app.kubernetes.io/name=developer-hub" >&2
       fi
+      rm -f "${body_file}"
       return 1
     fi
 
