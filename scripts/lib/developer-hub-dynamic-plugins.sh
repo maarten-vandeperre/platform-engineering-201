@@ -78,34 +78,87 @@ sanity_check_rh_registry_token() {
   return 0
 }
 
-# Verify credentials against registry.redhat.io (curl; skopeo when available).
+# Last validation step: format (sanity) or live (registry API).
+RH_REGISTRY_VALIDATION_STEP=""
+
+_rh_registry_auth_url() {
+  printf '%s' \
+    'https://registry.redhat.io/auth/realms/rhcc/protocol/redhat-docker-v2/auth?service=docker-registry&scope=repository:ubi9/ubi-minimal:pull'
+}
+
+_rh_registry_live_check_skopeo() {
+  local user="$1"
+  local token="$2"
+
+  if skopeo login --username "${user}" --password "${token}" registry.redhat.io >/dev/null 2>&1; then
+    skopeo logout registry.redhat.io >/dev/null 2>&1 || true
+    return 0
+  fi
+  return 1
+}
+
+# registry.redhat.io uses Bearer tokens; GET /v2/ returns 401 even with valid basic auth.
+_rh_registry_live_check_curl() {
+  local user="$1"
+  local token="$2"
+  local http_code
+
+  http_code="$(curl -s -o /dev/null -w '%{http_code}' \
+    -u "${user}:${token}" \
+    --connect-timeout 15 --max-time 30 \
+    "$(_rh_registry_auth_url)" 2>/dev/null || true)"
+  RH_REGISTRY_HTTP_CODE="${http_code}"
+  [[ "${http_code}" == "200" ]]
+}
+
+# Verify credentials against registry.redhat.io (skopeo preferred; curl OAuth fallback).
 validate_rh_registry_credentials() {
   local user="${1:-${RH_REGISTRY_USERNAME:-}}"
   local token="${2:-${RH_REGISTRY_TOKEN:-}}"
 
+  RH_REGISTRY_VALIDATION_STEP="format"
   sanity_check_rh_registry_token "${user}" "${token}" || return 1
 
-  local http_code=""
-  if command -v curl >/dev/null 2>&1; then
-    http_code="$(curl -s -o /dev/null -w '%{http_code}' \
-      -u "${user}:${token}" \
-      --connect-timeout 15 --max-time 30 \
-      "https://registry.redhat.io/v2/" 2>/dev/null || true)"
-    if [[ "${http_code}" == "200" ]]; then
-      return 0
-    fi
-  elif command -v skopeo >/dev/null 2>&1; then
-    if skopeo login --username "${user}" --password "${token}" registry.redhat.io >/dev/null 2>&1; then
-      skopeo logout registry.redhat.io >/dev/null 2>&1 || true
-      return 0
-    fi
-  else
-    echo "WARNING: curl/skopeo not found; skipping live registry.redhat.io credential check." >&2
+  if [[ "${RH_REGISTRY_SKIP_LIVE_VALIDATION:-false}" == "true" \
+    || "${RH_REGISTRY_SKIP_LIVE_VALIDATION:-false}" == "1" ]]; then
+    echo "WARNING: skipping live registry.redhat.io credential check (RH_REGISTRY_SKIP_LIVE_VALIDATION=true)." >&2
     return 0
   fi
 
-  rh_registry_credentials_invalid_message "HTTP ${http_code:-000} from registry.redhat.io/v2/"
-  return 1
+  RH_REGISTRY_VALIDATION_STEP="live"
+
+  if command -v skopeo >/dev/null 2>&1; then
+    if _rh_registry_live_check_skopeo "${user}" "${token}"; then
+      return 0
+    fi
+    rh_registry_credentials_invalid_message "skopeo login to registry.redhat.io failed"
+    return 1
+  fi
+
+  if command -v curl >/dev/null 2>&1; then
+    local http_code=""
+    if _rh_registry_live_check_curl "${user}" "${token}"; then
+      return 0
+    fi
+    http_code="${RH_REGISTRY_HTTP_CODE:-000}"
+    if [[ "${http_code}" == "401" || "${http_code}" == "403" ]]; then
+      rh_registry_credentials_invalid_message \
+        "registry.redhat.io rejected credentials (HTTP ${http_code})"
+      return 1
+    fi
+    if [[ "${http_code}" == "000" || -z "${http_code}" ]]; then
+      echo "WARNING: cannot reach registry.redhat.io from this environment (HTTP ${http_code:-000})." >&2
+      echo "  Format checks passed; applying credentials anyway. Confirm pulls on the cluster," >&2
+      echo "  or set RH_REGISTRY_SKIP_LIVE_VALIDATION=true to silence this warning." >&2
+      return 0
+    fi
+    rh_registry_credentials_invalid_message \
+      "unexpected HTTP ${http_code} from registry.redhat.io auth endpoint"
+    return 1
+  fi
+
+  echo "WARNING: curl/skopeo not found; skipping live registry.redhat.io credential check." >&2
+  return 0
 }
 
 require_aap_registry_credentials() {

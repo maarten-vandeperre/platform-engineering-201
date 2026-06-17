@@ -119,10 +119,13 @@ ensure_registry_pull_secret() {
   local user token auth_b64 auth_json tmp
 
   if [[ -n "${RH_REGISTRY_PULL_SECRET:-}" ]]; then
-    oc get secret "${RH_REGISTRY_PULL_SECRET}" -n "${RHDH_NAMESPACE}" \
+    if ! oc get secret "${RH_REGISTRY_PULL_SECRET}" -n "${RHDH_NAMESPACE}" \
       -o jsonpath='{.data.\.dockerconfigjson}' \
-      | base64_decode > /tmp/rhdh-dockerconfig.json
-    python3 - <<'PY' /tmp/rhdh-dockerconfig.json > /tmp/rhdh-auth.json
+      | base64_decode > /tmp/rhdh-dockerconfig.json; then
+      echo "ERROR: pull secret ${RH_REGISTRY_PULL_SECRET} not found in namespace ${RHDH_NAMESPACE} (extract step)." >&2
+      return 1
+    fi
+    if ! python3 - <<'PY' /tmp/rhdh-dockerconfig.json > /tmp/rhdh-auth.json
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as handle:
     docker = json.load(handle)
@@ -132,6 +135,11 @@ if not redhat:
     sys.exit("registry.redhat.io not found in pull secret")
 print(json.dumps({"auths": {"registry.redhat.io": redhat}}, indent=2))
 PY
+    then
+      rm -f /tmp/rhdh-dockerconfig.json /tmp/rhdh-auth.json
+      echo "ERROR: ${RH_REGISTRY_PULL_SECRET} has no registry.redhat.io entry (extract step)." >&2
+      return 1
+    fi
     user="$(python3 - /tmp/rhdh-auth.json <<'PY'
 import base64, json, sys
 with open(sys.argv[1], encoding="utf-8") as handle:
@@ -148,13 +156,18 @@ user_pass = base64.b64decode(auth).decode("utf-8", errors="ignore")
 print(user_pass.split(":", 1)[1])
 PY
 )"
-    validate_rh_registry_credentials "${user}" "${token}" || {
+    if ! validate_rh_registry_credentials "${user}" "${token}"; then
       rm -f /tmp/rhdh-dockerconfig.json /tmp/rhdh-auth.json
+      echo "ERROR: credentials from ${RH_REGISTRY_PULL_SECRET} failed ${RH_REGISTRY_VALIDATION_STEP:-live} check." >&2
       return 1
-    }
-    oc create secret generic "${secret_name}" -n "${RHDH_NAMESPACE}" \
+    fi
+    if ! oc create secret generic "${secret_name}" -n "${RHDH_NAMESPACE}" \
       --from-file=auth.json=/tmp/rhdh-auth.json \
-      --dry-run=client -o yaml | oc apply -f -
+      --dry-run=client -o yaml | oc apply -f -; then
+      rm -f /tmp/rhdh-dockerconfig.json /tmp/rhdh-auth.json
+      echo "ERROR: oc apply failed for secret ${secret_name} in ${RHDH_NAMESPACE} (oc apply step)." >&2
+      return 1
+    fi
     rm -f /tmp/rhdh-dockerconfig.json /tmp/rhdh-auth.json
     echo "Applied ${secret_name} from ${RH_REGISTRY_PULL_SECRET}"
     return 0
@@ -167,7 +180,10 @@ PY
     return 1
   fi
 
-  validate_rh_registry_credentials "${user}" "${token}" || return 1
+  if ! validate_rh_registry_credentials "${user}" "${token}"; then
+    echo "ERROR: RH_REGISTRY_* credentials failed ${RH_REGISTRY_VALIDATION_STEP:-live} check." >&2
+    return 1
+  fi
 
   auth_b64="$(printf '%s:%s' "${user}" "${token}" | base64 | tr -d '\n')"
   tmp="$(mktemp)"
@@ -180,9 +196,13 @@ PY
   }
 }
 EOF
-  oc create secret generic "${secret_name}" -n "${RHDH_NAMESPACE}" \
+  if ! oc create secret generic "${secret_name}" -n "${RHDH_NAMESPACE}" \
     --from-file=auth.json="${tmp}" \
-    --dry-run=client -o yaml | oc apply -f -
+    --dry-run=client -o yaml | oc apply -f -; then
+    rm -f "${tmp}"
+    echo "ERROR: oc apply failed for secret ${secret_name} in ${RHDH_NAMESPACE} (oc apply step)." >&2
+    return 1
+  fi
   rm -f "${tmp}"
   echo "Applied ${secret_name} for registry.redhat.io"
 }
@@ -261,7 +281,6 @@ resolve_deploy_name() {
 export AAP_CHECK_SSL="${AAP_CHECK_SSL:-false}"
 
 if ! ensure_registry_pull_secret; then
-  echo "ERROR: Could not configure registry.redhat.io auth for Ansible OCI plugins." >&2
   exit 1
 fi
 
