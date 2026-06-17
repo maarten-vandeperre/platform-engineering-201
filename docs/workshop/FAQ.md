@@ -45,7 +45,7 @@ oc logs -n "$WORKSHOP_NAMESPACE" -l app.kubernetes.io/name=developer-hub \
 
 Another pod (or a crashed prior install) left a lock on the `dynamic-plugins-root` PVC.
 
-**Fix:**
+**Fix (clear the lock first):**
 
 ```bash
 oc scale deployment/redhat-developer-hub -n "$WORKSHOP_NAMESPACE" --replicas=0
@@ -54,7 +54,33 @@ oc scale deployment/redhat-developer-hub -n "$WORKSHOP_NAMESPACE" --replicas=0
 ./scripts/setup-developer-hub-config.sh
 ```
 
-Or: `./scripts/repair-developer-hub.sh`
+### I ran `./scripts/repair-developer-hub.sh` — should it go better now?
+
+**Yes, if** the PVC lock was cleared and `RH_REGISTRY_*` credentials are correct in `workshop.env`. Repair deletes stuck Developer Hub pods and waits for a fresh rollout.
+
+**Important:** `./scripts/repair-developer-hub.sh` **does not** clear the `install-dynamic-plugins.lock` file on the PVC. If the previous pod was stuck on “Waiting for lock release”, run `--clear-lock` **before** repair (see above). Otherwise the new pod can hang the same way.
+
+**What to expect on a healthy repair:**
+
+1. Old pod deleted, new pod scheduled.
+2. `install-dynamic-plugins` runs (5–15 min on first install with AAP; faster if plugins are cached on the PVC).
+3. `init-rag-data` runs (~1–2 min).
+4. Main containers and sidecars start; pod reaches **4/4 Running**.
+
+**Watch the init container that matters** (do not rely only on the script progress line — it may show `init-rag-data` while `install-dynamic-plugins` is still running until you `git pull` the latest scripts):
+
+```bash
+oc logs -n "$WORKSHOP_NAMESPACE" -l app.kubernetes.io/name=developer-hub \
+  -c install-dynamic-plugins -f
+```
+
+| Log output | Meaning |
+|------------|---------|
+| Plugin install progress | Normal — wait 5–15 min on first install |
+| `Waiting for lock release` | Lock still on PVC — scale to 0, run `--clear-lock`, retry |
+| `Please login to the Red Hat Registry` | Fix `RH_REGISTRY_USERNAME` / `RH_REGISTRY_TOKEN`, then `./scripts/setup-developer-hub-aap.sh --force-rollout` |
+
+After `install-dynamic-plugins` completes, the rest of the rollout is usually quick. Repair finishes when the route returns HTTP 200 and prints the Developer Hub URL.
 
 ### `timed out waiting for the condition` during rollout
 
@@ -204,9 +230,9 @@ Pull the latest `main` — helper functions live in `scripts/lib/common.sh`.
 
 | Symptom | First command to try |
 |---------|----------------------|
-| Stuck on plugin lock | `./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock` |
+| Stuck on plugin lock | `./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock` then config or repair |
 | Registry / Ansible init failure | `./scripts/setup-developer-hub-aap.sh --force-rollout` |
 | Empty catalog / missing config | `./scripts/setup-developer-hub-config.sh` |
 | Full stack idle / scaled down | `./scripts/ensure-workshop-platform.sh` |
-| Everything misbehaving | `./scripts/repair-developer-hub.sh` |
+| Stuck pod / platform repair (after lock cleared) | `./scripts/repair-developer-hub.sh` |
 | Validate end-to-end | `./scripts/validate-workshop.sh` |
