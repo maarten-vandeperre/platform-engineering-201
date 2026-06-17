@@ -180,11 +180,17 @@ resolve_rh_registry() {
     && -n "${RH_TOKEN}" && "${RH_TOKEN}" != "changeme" ]]; then
     export RH_REGISTRY_USERNAME="${RH_USER}"
     export RH_REGISTRY_TOKEN="${RH_TOKEN}"
+    # shellcheck disable=SC1091
+    source "${SCRIPTS_DIR}/lib/developer-hub-dynamic-plugins.sh"
+    validate_rh_registry_credentials "${RH_REGISTRY_USERNAME}" "${RH_REGISTRY_TOKEN}" || return 1
     return 0
   fi
 
   if [[ "${DRY_RUN}" != "true" ]] && aap_try_detect_rh_registry 2>/dev/null; then
     echo "Detected RH registry credentials from cluster pull secret"
+    # shellcheck disable=SC1091
+    source "${SCRIPTS_DIR}/lib/developer-hub-dynamic-plugins.sh"
+    validate_rh_registry_credentials "${RH_REGISTRY_USERNAME}" "${RH_REGISTRY_TOKEN}" || return 1
     return 0
   fi
 
@@ -198,6 +204,9 @@ resolve_rh_registry() {
       echo ""
       export RH_REGISTRY_USERNAME="${RH_USER}"
       export RH_REGISTRY_TOKEN="${RH_TOKEN}"
+      # shellcheck disable=SC1091
+      source "${SCRIPTS_DIR}/lib/developer-hub-dynamic-plugins.sh"
+      validate_rh_registry_credentials "${RH_REGISTRY_USERNAME}" "${RH_REGISTRY_TOKEN}" || return 1
       return 0
     fi
   fi

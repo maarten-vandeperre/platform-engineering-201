@@ -568,8 +568,10 @@ print_deployment_pod_failure_hints() {
 
   if [[ "${fatal_reason}" == "CrashLoopBackOff" ]] \
     && oc logs "${pod}" -n "${namespace}" -c install-dynamic-plugins --tail=5 2>/dev/null \
-      | grep -qiE 'Please login to the Red Hat Registry|unauthorized|authentication required'; then
-    echo "  HINT: registry.redhat.io auth failed — configure RH registry credentials before re-running bootstrap." >&2
+      | grep -qiE 'Please login to the Red Hat Registry|unauthorized|authentication required|invalid username/password'; then
+    echo "  HINT: registry.redhat.io auth failed — set RH_REGISTRY_USERNAME/RH_REGISTRY_TOKEN from" >&2
+    echo "        https://access.redhat.com/terms-based-registry/accounts (not OpenShift/AAP tokens)." >&2
+    echo "        Validate: ./scripts/setup-developer-hub-aap.sh --force-rollout" >&2
   fi
 }
 

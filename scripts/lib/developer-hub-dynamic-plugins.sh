@@ -87,10 +87,10 @@ validate_rh_registry_credentials() {
 
   local http_code=""
   if command -v curl >/dev/null 2>&1; then
-    http_code="$(curl -fsS -o /dev/null -w '%{http_code}' \
+    http_code="$(curl -s -o /dev/null -w '%{http_code}' \
       -u "${user}:${token}" \
       --connect-timeout 15 --max-time 30 \
-      "https://registry.redhat.io/v2/" 2>/dev/null || echo "000")"
+      "https://registry.redhat.io/v2/" 2>/dev/null || true)"
     if [[ "${http_code}" == "200" ]]; then
       return 0
     fi
