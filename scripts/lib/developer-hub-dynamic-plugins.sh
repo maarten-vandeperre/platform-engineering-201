@@ -18,14 +18,7 @@ is_aap_management_enabled() {
     || "${AAP_MANAGEMENT_ENABLED:-false}" == "yes" ]]
 }
 
-require_aap_registry_credentials() {
-  if [[ -n "${RH_REGISTRY_PULL_SECRET:-}" ]]; then
-    return 0
-  fi
-  if [[ -n "${RH_REGISTRY_USERNAME:-}" && "${RH_REGISTRY_USERNAME}" != "changeme" \
-    && -n "${RH_REGISTRY_TOKEN:-}" && "${RH_REGISTRY_TOKEN}" != "changeme" ]]; then
-    return 0
-  fi
+rh_registry_credentials_missing_message() {
   cat <<EOF >&2
 ERROR: AAP_ENABLED=true but Red Hat registry credentials are missing.
 
@@ -40,7 +33,91 @@ Or run:
   ./scripts/configure-aap-workshop-env.sh --rh-registry-username <sa> --rh-registry-token <token>
 
 EOF
+}
+
+rh_registry_credentials_invalid_message() {
+  local detail="${1:-registry.redhat.io rejected the credentials}"
+  cat <<EOF >&2
+ERROR: Red Hat registry credentials are invalid (${detail}).
+
+RH_REGISTRY_USERNAME and RH_REGISTRY_TOKEN must come from a Red Hat Container Registry
+service account — NOT your AAP login, OpenShift token, or GitHub PAT.
+
+Create or open a service account at:
+  https://access.redhat.com/terms-based-registry/accounts
+
+Then set in scripts/workshop.env:
+  export RH_REGISTRY_USERNAME=<service-account-name>
+  export RH_REGISTRY_TOKEN=<service-account-token>
+
+Re-run:
+  ./scripts/setup-developer-hub-aap.sh --force-rollout
+
+EOF
+}
+
+# Reject common misconfigurations before hitting the registry.
+sanity_check_rh_registry_token() {
+  local user="$1"
+  local token="$2"
+
+  if [[ "${token}" == *":eyJ"* ]] || [[ "${token}" == eyJ* ]]; then
+    rh_registry_credentials_invalid_message \
+      "RH_REGISTRY_TOKEN looks like an OpenShift/JWT token — use the registry service account token instead"
+    return 1
+  fi
+  if [[ "${#token}" -gt 512 ]]; then
+    rh_registry_credentials_invalid_message \
+      "RH_REGISTRY_TOKEN is unusually long — paste only the registry service account token"
+    return 1
+  fi
+  if [[ -z "${user}" || "${user}" == "changeme" || -z "${token}" || "${token}" == "changeme" ]]; then
+    rh_registry_credentials_missing_message
+    return 1
+  fi
+  return 0
+}
+
+# Verify credentials against registry.redhat.io (curl; skopeo when available).
+validate_rh_registry_credentials() {
+  local user="${1:-${RH_REGISTRY_USERNAME:-}}"
+  local token="${2:-${RH_REGISTRY_TOKEN:-}}"
+
+  sanity_check_rh_registry_token "${user}" "${token}" || return 1
+
+  local http_code=""
+  if command -v curl >/dev/null 2>&1; then
+    http_code="$(curl -fsS -o /dev/null -w '%{http_code}' \
+      -u "${user}:${token}" \
+      --connect-timeout 15 --max-time 30 \
+      "https://registry.redhat.io/v2/" 2>/dev/null || echo "000")"
+    if [[ "${http_code}" == "200" ]]; then
+      return 0
+    fi
+  elif command -v skopeo >/dev/null 2>&1; then
+    if skopeo login --username "${user}" --password "${token}" registry.redhat.io >/dev/null 2>&1; then
+      skopeo logout registry.redhat.io >/dev/null 2>&1 || true
+      return 0
+    fi
+  else
+    echo "WARNING: curl/skopeo not found; skipping live registry.redhat.io credential check." >&2
+    return 0
+  fi
+
+  rh_registry_credentials_invalid_message "HTTP ${http_code:-000} from registry.redhat.io/v2/"
   return 1
+}
+
+require_aap_registry_credentials() {
+  if [[ -n "${RH_REGISTRY_PULL_SECRET:-}" ]]; then
+    return 0
+  fi
+  if [[ -z "${RH_REGISTRY_USERNAME:-}" || "${RH_REGISTRY_USERNAME}" == "changeme" \
+    || -z "${RH_REGISTRY_TOKEN:-}" || "${RH_REGISTRY_TOKEN}" == "changeme" ]]; then
+    rh_registry_credentials_missing_message
+    return 1
+  fi
+  validate_rh_registry_credentials "${RH_REGISTRY_USERNAME}" "${RH_REGISTRY_TOKEN}"
 }
 
 rollout_timeout_for_config() {

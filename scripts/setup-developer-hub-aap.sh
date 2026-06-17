@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/aap.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/developer-hub-dynamic-plugins.sh"
 
 usage() {
   cat <<EOF
@@ -130,6 +132,26 @@ if not redhat:
     sys.exit("registry.redhat.io not found in pull secret")
 print(json.dumps({"auths": {"registry.redhat.io": redhat}}, indent=2))
 PY
+    user="$(python3 - /tmp/rhdh-auth.json <<'PY'
+import base64, json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    auth = json.load(handle)["auths"]["registry.redhat.io"]["auth"]
+user_pass = base64.b64decode(auth).decode("utf-8", errors="ignore")
+print(user_pass.split(":", 1)[0])
+PY
+)"
+    token="$(python3 - /tmp/rhdh-auth.json <<'PY'
+import base64, json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    auth = json.load(handle)["auths"]["registry.redhat.io"]["auth"]
+user_pass = base64.b64decode(auth).decode("utf-8", errors="ignore")
+print(user_pass.split(":", 1)[1])
+PY
+)"
+    validate_rh_registry_credentials "${user}" "${token}" || {
+      rm -f /tmp/rhdh-dockerconfig.json /tmp/rhdh-auth.json
+      return 1
+    }
     oc create secret generic "${secret_name}" -n "${RHDH_NAMESPACE}" \
       --from-file=auth.json=/tmp/rhdh-auth.json \
       --dry-run=client -o yaml | oc apply -f -
@@ -141,13 +163,11 @@ PY
   user="${RH_REGISTRY_USERNAME:-changeme}"
   token="${RH_REGISTRY_TOKEN:-changeme}"
   if [[ "${user}" == "changeme" || "${token}" == "changeme" ]]; then
-    echo "WARNING: RH_REGISTRY_USERNAME/RH_REGISTRY_TOKEN not set."
-    echo "OCI Ansible plugins require registry.redhat.io auth. Create a service account at"
-    echo "https://access.redhat.com/terms-based-registry/accounts and set:"
-    echo "  export RH_REGISTRY_USERNAME=<service-account-name>"
-    echo "  export RH_REGISTRY_TOKEN=<token>"
+    rh_registry_credentials_missing_message
     return 1
   fi
+
+  validate_rh_registry_credentials "${user}" "${token}" || return 1
 
   auth_b64="$(printf '%s:%s' "${user}" "${token}" | base64 | tr -d '\n')"
   tmp="$(mktemp)"
@@ -170,19 +190,26 @@ EOF
 ensure_image_pull_secret_on_deployment() {
   local deploy_name="$1"
   local pull_secret="${RH_REGISTRY_PULL_SECRET_NAME:-redhat-developer-hub-pull-secret}"
+  local user token
 
-  if [[ -z "${RH_REGISTRY_USERNAME:-}" || "${RH_REGISTRY_USERNAME}" == "changeme" ]]; then
-    return 0
-  fi
-  if [[ -z "${RH_REGISTRY_TOKEN:-}" || "${RH_REGISTRY_TOKEN}" == "changeme" ]]; then
+  user="${RH_REGISTRY_USERNAME:-changeme}"
+  token="${RH_REGISTRY_TOKEN:-changeme}"
+  if [[ "${user}" == "changeme" || "${token}" == "changeme" ]]; then
     return 0
   fi
 
   oc create secret docker-registry "${pull_secret}" -n "${RHDH_NAMESPACE}" \
     --docker-server=registry.redhat.io \
-    --docker-username="${RH_REGISTRY_USERNAME}" \
-    --docker-password="${RH_REGISTRY_TOKEN}" \
+    --docker-username="${user}" \
+    --docker-password="${token}" \
     --dry-run=client -o yaml | oc apply -f -
+
+  oc patch serviceaccount default -n "${RHDH_NAMESPACE}" --type=json \
+    -p="[{\"op\":\"add\",\"path\":\"/imagePullSecrets/-\",\"value\":{\"name\":\"${pull_secret}\"}}]" \
+    2>/dev/null \
+    || oc patch serviceaccount default -n "${RHDH_NAMESPACE}" --type=json \
+      -p="[{\"op\":\"add\",\"path\":\"/imagePullSecrets\",\"value\":[{\"name\":\"${pull_secret}\"}]}]" \
+      2>/dev/null || true
 
   oc patch deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" --type=json \
     -p="[{\"op\":\"add\",\"path\":\"/spec/template/spec/imagePullSecrets\",\"value\":[{\"name\":\"${pull_secret}\"}]}]" \

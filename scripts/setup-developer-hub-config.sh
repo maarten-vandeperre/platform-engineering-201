@@ -216,6 +216,7 @@ render_app_config() {
 
 prepare_developer_hub_rollout() {
   if is_aap_enabled; then
+    echo "Validating and applying registry.redhat.io auth before Developer Hub rollout..."
     require_aap_registry_credentials
     "${SCRIPTS_DIR}/setup-developer-hub-aap.sh" --no-rollout
   fi
@@ -312,6 +313,7 @@ if is_aap_enabled && [[ "${RH_REGISTRY_TOKEN:-changeme}" == "changeme" ]]; then
   echo "WARNING: RH_REGISTRY_USERNAME/RH_REGISTRY_TOKEN not set."
   echo "Ansible OCI dynamic plugins require registry.redhat.io auth:"
   echo "  https://access.redhat.com/terms-based-registry/accounts"
+  echo "Use the registry service account token — not an OpenShift or AAP token."
 fi
 
 if is_aap_enabled && ! is_aap_management_enabled; then
