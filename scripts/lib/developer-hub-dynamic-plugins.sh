@@ -130,13 +130,14 @@ validate_rh_registry_credentials() {
   fi
 
   RH_REGISTRY_VALIDATION_STEP="live"
+  local skopeo_failed=false
 
   if command -v skopeo >/dev/null 2>&1; then
     if _rh_registry_live_check_skopeo "${user}" "${token}"; then
       return 0
     fi
-    rh_registry_credentials_invalid_message "skopeo login to registry.redhat.io failed"
-    return 1
+    skopeo_failed=true
+    echo "WARNING: skopeo login to registry.redhat.io failed from this environment; trying curl OAuth check..." >&2
   fi
 
   if command -v curl >/dev/null 2>&1; then
@@ -146,8 +147,12 @@ validate_rh_registry_credentials() {
     fi
     http_code="${RH_REGISTRY_HTTP_CODE:-000}"
     if [[ "${http_code}" == "401" || "${http_code}" == "403" ]]; then
+      local hint=""
+      if [[ "${user}" != *"|"* ]]; then
+        hint=" Username may need the full form from Token Information (e.g. 11009103|my-sa-name)."
+      fi
       rh_registry_credentials_invalid_message \
-        "registry.redhat.io rejected credentials (HTTP ${http_code})"
+        "registry.redhat.io rejected credentials (HTTP ${http_code}).${hint}"
       return 1
     fi
     if [[ "${http_code}" == "000" || -z "${http_code}" ]]; then
@@ -156,9 +161,20 @@ validate_rh_registry_credentials() {
       echo "  or set RH_REGISTRY_SKIP_LIVE_VALIDATION=true to silence this warning." >&2
       return 0
     fi
+    if [[ "${skopeo_failed}" == "true" ]]; then
+      echo "WARNING: registry.redhat.io live check inconclusive (skopeo failed, curl HTTP ${http_code})." >&2
+      echo "  Applying credentials anyway — install-dynamic-plugins will verify on the cluster." >&2
+      return 0
+    fi
     rh_registry_credentials_invalid_message \
       "unexpected HTTP ${http_code} from registry.redhat.io auth endpoint"
     return 1
+  fi
+
+  if [[ "${skopeo_failed}" == "true" ]]; then
+    echo "WARNING: skopeo login failed and curl is unavailable; applying credentials without live check." >&2
+    echo "  Set RH_REGISTRY_SKIP_LIVE_VALIDATION=true to silence this warning." >&2
+    return 0
   fi
 
   echo "WARNING: curl/skopeo not found; skipping live registry.redhat.io credential check." >&2
