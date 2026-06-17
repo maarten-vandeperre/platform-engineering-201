@@ -12,12 +12,15 @@
 
 ## Local tools
 
+Workshop scripts require **bash 4+** and run on **macOS and Linux** (including Red Hat Developer Sandbox / RHDAT). Run `./scripts/bootstrap-workshop.sh` — do not invoke with `sh`.
+
 | Tool | Used for |
 |------|----------|
+| `bash` | All workshop scripts (`scripts/lib/common.sh` provides portable helpers) |
 | `oc` | Applying manifests, builds, validation |
 | `curl` | API and health checks |
 | `jq` | JSON output in validation scripts |
-| `envsubst` | Rendering configurable manifests (gettext) |
+| `envsubst` | Optional — scripts use `workshop_envsubst` in `common.sh` (gettext when installed, bash fallback otherwise) |
 | `helm` | Helm install path only ([03b-install-with-helm](03b-install-with-helm.md)) |
 
 Optional:
@@ -32,7 +35,7 @@ Optional:
 Fork [platform-engineering-201](https://github.com/maarten-vandeperre/platform-engineering-201) to your GitHub organization and update `scripts/workshop.env`:
 
 - `WORKSHOP_GIT_REPO` — clone URL of your fork
-- `WORKSHOP_GITHUB_ORG` / `WORKSHOP_GITHUB_REPO` — used for catalog annotations such as `github.com/project-slug` (rendered via `envsubst`; not hard-coded in YAML)
+- `WORKSHOP_GITHUB_ORG` / `WORKSHOP_GITHUB_REPO` — used for catalog annotations such as `github.com/project-slug` (rendered via `workshop_envsubst`; not hard-coded in YAML)
 - `CLUSTER_ROUTER_BASE` — your OpenShift apps domain
 
 ## GitHub token (required for scaffolder publish)
@@ -136,6 +139,36 @@ export CLUSTER_ROUTER_BASE=apps.your-cluster.example.com
 ```
 
 `CLUSTER_ROUTER_BASE` is the shared suffix for OpenShift routes (the part after the first hostname label). Example: for route `people-frontend-myns.apps.rm1.example.com`, set `CLUSTER_ROUTER_BASE=apps.rm1.example.com`.
+
+On **Red Hat Developer Sandbox**, leave `CLUSTER_ROUTER_BASE` at the default (`apps.example.com`) or omit it — bootstrap auto-detects the correct domain from the OpenShift console route or from existing routes in your namespace (Keycloak, People Service, Developer Hub). If you switch clusters, clear any stale value or delete the old `CLUSTER_ROUTER_BASE` line so detection can run again.
+
+### Route permission errors during Helm install
+
+If bootstrap fails with:
+
+```text
+Route ... is invalid: spec.host: Invalid value: "...": you do not have permission to set the host field of the route
+```
+
+the usual cause is a **stale `CLUSTER_ROUTER_BASE`** in `scripts/workshop.env` from a previous cluster (for example `apps.rm2.thpm.p1.openshiftapps.com` while your sandbox uses `apps.ocp.*.sandbox*.opentlc.com`).
+
+**Fix:**
+
+1. Update or remove `CLUSTER_ROUTER_BASE` in `scripts/workshop.env` (use `apps.example.com` to force auto-detection).
+2. Re-run bootstrap or just the Helm step:
+
+   ```bash
+   source scripts/workshop.env
+   ./scripts/install-developer-hub-helm.sh
+   ```
+
+Workshop GitOps routes (Keycloak, People Service, catalog server) omit `spec.host` so OpenShift assigns hostnames automatically. The Developer Hub Helm chart sets `spec.host` from `CLUSTER_ROUTER_BASE`; install scripts now detect the live cluster domain and reuse an existing route host when upgrading.
+
+Verify your route hostname after install:
+
+```bash
+oc get route redhat-developer-hub -o jsonpath='{.spec.host}{"\n"}'
+```
 
 ## Next step
 

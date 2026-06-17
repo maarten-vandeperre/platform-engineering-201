@@ -11,10 +11,7 @@ require_oc
 command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
-if [[ -z "${KEYCLOAK_URL:-}" ]]; then
-  KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")
-  export KEYCLOAK_URL="https://${KEYCLOAK_HOST}"
-fi
+resolve_keycloak_urls
 
 wait_for_keycloak() {
   if ! oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then

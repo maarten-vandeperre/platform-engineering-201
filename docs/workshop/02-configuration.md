@@ -96,7 +96,15 @@ See [06c-ansible-automation-platform.md](06c-ansible-automation-platform.md) for
 
 ## Auto-detect cluster router base
 
-If `CLUSTER_ROUTER_BASE` is unset, bootstrap calls `detect_cluster_router_base()` in `scripts/lib/common.sh`, which reads the OpenShift console route. You can still set it explicitly when auto-detection fails.
+If `CLUSTER_ROUTER_BASE` is unset or left at `apps.example.com`, bootstrap calls `detect_cluster_router_base()` in `scripts/lib/common.sh`, which:
+
+1. Reads the OpenShift console route (`openshift-console/console`).
+2. Falls back to existing routes in your workshop namespace (Keycloak, People Service, Developer Hub, Argo CD).
+3. Updates and persists the detected value to `scripts/workshop.env` when it differs from a stale cluster domain.
+
+Helm install scripts reuse an **existing Developer Hub route host** when upgrading, so sandbox clusters do not reject Route patches with a hostname from the wrong router domain.
+
+You can still set `CLUSTER_ROUTER_BASE` explicitly when auto-detection fails. See [01-prerequisites — Route permission errors](01-prerequisites.md#route-permission-errors-during-helm-install) for troubleshooting.
 
 ## How rendering works
 

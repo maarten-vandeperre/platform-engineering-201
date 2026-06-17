@@ -92,46 +92,6 @@ data:
         - people-rest-api
     ---
     apiVersion: backstage.io/v1alpha1
-    kind: Component
-    metadata:
-      name: quarkus-workshop-guide
-      title: Quarkus Workshop Guide
-      description: TechDocs guide for working with Quarkus in the People Service workshop.
-      annotations:
-        backstage.io/techdocs-ref: dir:./techdocs/quarkus-guide
-      tags:
-        - quarkus
-        - documentation
-        - techdocs
-      links:
-        - url: https://quarkus.io/
-          title: Quarkus project
-          icon: docs
-    spec:
-      type: documentation
-      lifecycle: production
-      owner: guests
-      system: people-platform
-    ---
-    apiVersion: backstage.io/v1alpha1
-    kind: Component
-    metadata:
-      name: platform-architecture-records
-      title: Platform Architecture Decision Records
-      description: Sample ADRs documenting workshop platform choices.
-      annotations:
-        backstage.io/techdocs-ref: dir:./techdocs/adrs
-      tags:
-        - adr
-        - architecture
-        - techdocs
-    spec:
-      type: documentation
-      lifecycle: production
-      owner: guests
-      system: people-platform
-    ---
-    apiVersion: backstage.io/v1alpha1
     kind: API
     metadata:
       name: people-rest-api

@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Fallback installer when the workspace runs the base ubi9/openjdk-25 image
-# without the custom Dockerfile build (user-level tools into ~/.local).
 set -euo pipefail
 
 BIN_DIR="${HOME}/.local/bin"
@@ -33,15 +31,20 @@ install_helm() {
 }
 
 install_node() {
-  command -v node >/dev/null 2>&1 && return 0
+  if command -v node >/dev/null 2>&1; then
+    if node -e 'const [maj,min]=process.versions.node.split(".").map(Number); process.exit((maj===20&&min>=19)||(maj===22&&min>=12)||maj>=23?0:1)'; then
+      return 0
+    fi
+    echo "Node.js $(node --version) is too old; installing Node.js 22 via nvm..."
+  fi
   export NVM_DIR="${HOME}/.nvm"
   if [[ ! -s "${NVM_DIR}/nvm.sh" ]]; then
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
   fi
   # shellcheck source=/dev/null
   source "${NVM_DIR}/nvm.sh"
-  nvm install 20
-  nvm alias default 20
+  nvm install 22
+  nvm alias default 22
   ln -sf "${NVM_DIR}/versions/node/$(nvm version)/bin/node" "${BIN_DIR}/node" 2>/dev/null || true
   ln -sf "${NVM_DIR}/versions/node/$(nvm version)/bin/npm" "${BIN_DIR}/npm" 2>/dev/null || true
   corepack enable 2>/dev/null || true
@@ -56,5 +59,5 @@ install_oc
 install_helm
 install_node
 
-echo "JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/java-25}"
+echo "JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/java-21}"
 java -version 2>&1 | head -1

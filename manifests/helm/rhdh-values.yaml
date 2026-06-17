@@ -7,6 +7,8 @@
 
 global:
   clusterRouterBase: ${CLUSTER_ROUTER_BASE}
+  # When set (existing route host), Helm keeps the assigned sandbox hostname instead of recomputing from clusterRouterBase.
+  host: ${RHDH_HELM_GLOBAL_HOST}
 
 upstream:
   backstage:

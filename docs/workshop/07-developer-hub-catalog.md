@@ -158,11 +158,13 @@ Catalog annotations (TechDocs sources are mounted at `/catalog/techdocs/` inside
 ```yaml
 metadata:
   annotations:
-    backstage.io/techdocs-ref: dir:./techdocs/quarkus-guide
-    # ADR site uses dir:./techdocs/adrs
+    backstage.io/techdocs-ref: dir:.
 ```
 
-Sources live under `manifests/gitops/techdocs/`. The script `./scripts/setup-developer-hub-techdocs.sh` mounts them at `/catalog/techdocs/` inside Developer Hub.
+TechDocs components are registered from file catalog locations
+(`/catalog/techdocs/quarkus-guide/catalog-info.yaml` and
+`/catalog/techdocs/adrs/catalog-info.yaml`) so the builder reads a writable
+local directory instead of the catalog server URL.
 
 TechDocs builder settings in `app-config-rhdh.yaml`:
 

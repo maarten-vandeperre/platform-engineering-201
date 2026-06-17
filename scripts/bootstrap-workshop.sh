@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Re-exec with bash when invoked as `sh script.sh` (macOS /bin/sh is bash in POSIX mode).
-if [[ -z "${BASH_VERSION:-}" ]] || { shopt -oq posix 2>/dev/null; }; then
-  exec bash "$0" "$@"
+# Re-exec with bash when invoked as `sh script.sh` (dash / macOS posix sh lack bash features).
+if [ -z "${BASH_VERSION:-}" ] || [ -n "${POSIXLY_CORRECT:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
 fi
 set -euo pipefail
 

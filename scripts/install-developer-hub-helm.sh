@@ -13,16 +13,22 @@ resolve_keycloak_urls
 
 detect_cluster_router_base
 
-RHDH_HELM_CHART="${RHDH_HELM_CHART:-https://github.com/openshift-helm-charts/charts/releases/download/redhat-redhat-developer-hub-1.9.3/redhat-developer-hub-1.9.3.tgz}"
-ARGOCD_URL="${ARGOCD_URL:-https://argocd-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}}"
+RHDH_HELM_GLOBAL_HOST="$(resolve_rhdh_helm_global_host)"
+ARGOCD_HOST="$(resolve_argocd_route_host 2>/dev/null || true)"
+ARGOCD_URL="${ARGOCD_URL:-https://${ARGOCD_HOST:-argocd-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}}}"
 ARGOCD_TOKEN="${ARGOCD_TOKEN:-changeme}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-changeme}"
 
 export CLUSTER_ROUTER_BASE RHDH_APP_TITLE WORKSHOP_GIT_REPO WORKSHOP_GIT_BRANCH \
   KEYCLOAK_URL KEYCLOAK_REALM RHDH_KEYCLOAK_CLIENT_ID RHDH_OIDC_CLIENT_SECRET \
-  ARGOCD_URL ARGOCD_TOKEN GITHUB_TOKEN
+  ARGOCD_URL ARGOCD_TOKEN GITHUB_TOKEN RHDH_HELM_GLOBAL_HOST
+
+RHDH_HELM_CHART="${RHDH_HELM_CHART:-https://github.com/openshift-helm-charts/charts/releases/download/redhat-redhat-developer-hub-1.9.3/redhat-developer-hub-1.9.3.tgz}"
 
 echo "Installing Red Hat Developer Hub via Helm into ${RHDH_NAMESPACE}..."
+if [[ -n "${RHDH_HELM_GLOBAL_HOST}" ]]; then
+  echo "Using existing Developer Hub route host: ${RHDH_HELM_GLOBAL_HOST}"
+fi
 
 helm_unlock_release redhat-developer-hub "${RHDH_NAMESPACE}"
 
@@ -34,7 +40,7 @@ oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
   --dry-run=client -o yaml | oc apply -f -
 
 VALUES_FILE="$(mktemp)"
-envsubst '${CLUSTER_ROUTER_BASE} ${RHDH_APP_TITLE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${GITHUB_TOKEN}' \
+workshop_envsubst '${CLUSTER_ROUTER_BASE} ${RHDH_HELM_GLOBAL_HOST} ${RHDH_APP_TITLE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${GITHUB_TOKEN}' \
   <"${MANIFESTS_DIR}/../helm/rhdh-values.yaml" >"${VALUES_FILE}"
 
 helm upgrade --install redhat-developer-hub "${RHDH_HELM_CHART}" \
@@ -46,5 +52,5 @@ rm -f "${VALUES_FILE}"
 
 "${SCRIPTS_DIR}/setup-developer-hub-dynamic-plugins-cache.sh" || true
 
-RHDH_HOST="redhat-developer-hub-${RHDH_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
+RHDH_HOST="$(resolve_rhdh_host)"
 echo "Developer Hub: https://${RHDH_HOST}"

@@ -5,21 +5,11 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
-from helpers import dismiss_onboarding, open_entity_tab, sign_in_via_rhdh_popup
+from helpers import dismiss_onboarding, open_entity_tab, sign_in_via_rhdh_popup, wait_for_page_text
 
 
 def _wait_for_text(driver, timeout, *needles):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        text = driver.find_element(By.TAG_NAME, "body").text
-        lowered = text.lower()
-        if all(needle.lower() in lowered for needle in needles):
-            return text
-        time.sleep(2)
-    pytest.fail(
-        "Expected page text not found. "
-        f"URL={driver.current_url} needles={needles}"
-    )
+    return wait_for_page_text(driver, timeout, *needles)
 
 
 @pytest.mark.e2e

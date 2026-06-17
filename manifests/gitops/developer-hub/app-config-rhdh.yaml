@@ -80,6 +80,10 @@ data:
       locations:
         - type: file
           target: /catalog/entities.yaml
+        - type: file
+          target: /catalog/techdocs/quarkus-guide/catalog-info.yaml
+        - type: file
+          target: /catalog/techdocs/adrs/catalog-info.yaml
         - type: url
           target: PLACEHOLDER-CATALOG-URL
 

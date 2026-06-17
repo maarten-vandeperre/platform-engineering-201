@@ -26,6 +26,8 @@ if command -v oc >/dev/null 2>&1; then
   # shellcheck disable=SC1091
   source "${REPO_ROOT}/scripts/lib/common.sh"
   ensure_workshop_platform
+  resolve_keycloak_urls
+  "${REPO_ROOT}/scripts/configure-keycloak-realm.sh"
 fi
 
 python3 -m pip install -q -r "${SCRIPT_DIR}/requirements.txt"

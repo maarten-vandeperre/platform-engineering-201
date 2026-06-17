@@ -18,8 +18,8 @@ RUN dnf install -y \
       findutils \
     && dnf clean all
 
-# Node.js 20 LTS (custom AAP plugin + People Service frontend)
-RUN curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - \
+# Node.js 22 LTS (>=22.12; required by yargs@18 and AAP Management plugin build)
+RUN curl -fsSL https://rpm.nodesource.com/setup_22.x | bash - \
     && dnf install -y nodejs \
     && dnf clean all \
     && corepack enable \
@@ -44,6 +44,7 @@ ENV JAVA_HOME=/usr/lib/jvm/java-25 \
 
 RUN java -version 2>&1 | grep -q 'version "25"' \
     && node --version \
+    && node -e 'const [maj,min]=process.versions.node.split(".").map(Number); const ok=(maj===20&&min>=19)||(maj===22&&min>=12)||maj>=23; if(!ok){console.error("Node.js "+process.versions.node+" is too old; need ^20.19.0 || ^22.12.0 || >=23"); process.exit(1)}' \
     && npm --version \
     && yarn --version \
     && oc version --client \

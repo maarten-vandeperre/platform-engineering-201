@@ -50,9 +50,19 @@ spec:
         - name: techdocs-adrs-source
           configMap:
             name: rhdh-techdocs-adrs
+        - name: catalog-entities
+          configMap:
+            name: workshop-catalog-entities
+            items:
+              - key: entities.yaml
+                path: entities.yaml
       containers:
         - name: backstage-backend
           volumeMounts:
             - name: techdocs-workspace
               mountPath: /catalog/techdocs
+              readOnly: false
+            - name: catalog-entities
+              mountPath: /catalog/entities.yaml
+              subPath: entities.yaml
               readOnly: true

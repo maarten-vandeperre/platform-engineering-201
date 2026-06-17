@@ -49,10 +49,54 @@ export type AapJob = {
   finished?: string | null;
   elapsed?: number;
   jobType?: 'job' | 'workflow_job' | string;
+  playbook?: string;
   summary_fields?: {
     job_template?: { id?: number; name?: string };
     unified_job_template?: { id?: number; name?: string };
     organization?: { name?: string };
     created_by?: { username?: string };
   };
+  workflowNodes?: AapWorkflowNode[];
+};
+
+export type AapWorkflowNode = {
+  id: number;
+  unified_job_name?: string;
+  summary_fields?: {
+    job?: { id?: number; name?: string; status?: string; type?: string };
+  };
+};
+
+export type AapJobEvent = {
+  id: number;
+  counter?: number;
+  created?: string;
+  event?: string;
+  stdout?: string;
+  hostName?: string;
+  task?: string;
+  play?: string;
+};
+
+export type AapJobTaskLog = {
+  id: number;
+  counter?: number;
+  created?: string;
+  event?: string;
+  status: string;
+  task?: string;
+  host?: string;
+  play?: string;
+  stdout?: string;
+  workflowNode?: string;
+};
+
+export type AapJobStdout = {
+  content: string;
+  note?: string;
+};
+
+export type AapJobRef = {
+  id: number;
+  jobType: 'job' | 'workflow_job';
 };

@@ -30,13 +30,8 @@ echo "OIDC issuer: ${OIDC_AUTH_SERVER_URL}"
 # Persist discovered URLs for subsequent deploy steps in this shell session.
 if [[ -f "${SCRIPTS_DIR}/workshop.env" ]]; then
   if grep -q '^export KEYCLOAK_URL=' "${SCRIPTS_DIR}/workshop.env"; then
-    if sed --version >/dev/null 2>&1; then
-      sed -i "s|^export KEYCLOAK_URL=.*|export KEYCLOAK_URL=\"${KEYCLOAK_URL}\"|" "${SCRIPTS_DIR}/workshop.env"
-      sed -i "s|^export OIDC_AUTH_SERVER_URL=.*|export OIDC_AUTH_SERVER_URL=\"${OIDC_AUTH_SERVER_URL}\"|" "${SCRIPTS_DIR}/workshop.env"
-    else
-      sed -i '' "s|^export KEYCLOAK_URL=.*|export KEYCLOAK_URL=\"${KEYCLOAK_URL}\"|" "${SCRIPTS_DIR}/workshop.env"
-      sed -i '' "s|^export OIDC_AUTH_SERVER_URL=.*|export OIDC_AUTH_SERVER_URL=\"${OIDC_AUTH_SERVER_URL}\"|" "${SCRIPTS_DIR}/workshop.env"
-    fi
+    sed_inplace "s|^export KEYCLOAK_URL=.*|export KEYCLOAK_URL=\"${KEYCLOAK_URL}\"|" "${SCRIPTS_DIR}/workshop.env"
+    sed_inplace "s|^export OIDC_AUTH_SERVER_URL=.*|export OIDC_AUTH_SERVER_URL=\"${OIDC_AUTH_SERVER_URL}\"|" "${SCRIPTS_DIR}/workshop.env"
   else
     {
       echo ""

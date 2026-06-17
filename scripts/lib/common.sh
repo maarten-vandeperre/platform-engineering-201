@@ -55,8 +55,6 @@ export LIGHTSPEED_VLLM_MAX_TOKENS
 export LIGHTSPEED_ENABLE_OPENAI
 export LIGHTSPEED_SAFETY_GUARD
 export MCP_TOKEN
-export AAP_ENABLED
-export AAP_MANAGEMENT_ENABLED
 
 # Argo CD is optional. Helm path skips it unless SKIP_ARGOCD=false (opt-in CD tab).
 # Operator path installs Argo CD unless SKIP_ARGOCD=true.
@@ -75,22 +73,86 @@ argocd_skip_message() {
   echo "Argo CD skipped (Helm path default). Set SKIP_ARGOCD=false in workshop.env for GitOps CD tab."
 }
 
-detect_cluster_router_base() {
-  local host=""
-  host=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
-  if [[ -z "${host}" ]]; then
-    host=$(oc get route -n openshift-console -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
-  fi
-  if [[ -n "${host}" && "${host}" == console-openshift-console.* ]]; then
-    local detected="${host#console-openshift-console.}"
-    if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "${detected}" \
-      && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
-      echo "Updating CLUSTER_ROUTER_BASE: ${CLUSTER_ROUTER_BASE} -> ${detected} (current cluster)"
+# Extract apps domain suffix from a route host like keycloak-myns.apps.cluster.example.com
+router_base_from_route_host() {
+  local host="$1"
+  local namespace="${2:-${WORKSHOP_NAMESPACE}}"
+  local suffix="-${namespace}."
+
+  [[ -n "${host}" && -n "${namespace}" ]] || return 1
+  [[ "${host}" == *"${suffix}"* ]] || return 1
+  echo "${host#*"${suffix}"}"
+}
+
+detect_router_base_from_namespace_routes() {
+  local namespace="${1:-${WORKSHOP_NAMESPACE}}"
+  local route_name host router_base
+
+  require_oc
+  [[ -n "${namespace}" ]] || return 1
+
+  for route_name in keycloak people-frontend people-backend redhat-developer-hub \
+    workshop-catalog-server argocd-server; do
+    host=$(get_route_host "${namespace}" "${route_name}" 2>/dev/null || true)
+    if router_base=$(router_base_from_route_host "${host}" "${namespace}"); then
+      echo "${router_base}"
+      return 0
     fi
-    export CLUSTER_ROUTER_BASE="${detected}"
+  done
+
+  host=$(oc get route -n "${namespace}" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
+  if router_base=$(router_base_from_route_host "${host}" "${namespace}"); then
+    echo "${router_base}"
     return 0
   fi
-  if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+  return 1
+}
+
+persist_cluster_router_base() {
+  local detected="$1"
+  local env_file="${SCRIPTS_DIR}/workshop.env"
+  local current=""
+
+  [[ -n "${detected}" && -f "${env_file}" ]] || return 0
+  if grep -q '^export CLUSTER_ROUTER_BASE=' "${env_file}"; then
+    current=$(grep '^export CLUSTER_ROUTER_BASE=' "${env_file}" \
+      | sed -E 's/^export CLUSTER_ROUTER_BASE=//' \
+      | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//')
+    if [[ "${current}" == "${detected}" || "${current}" == "apps.example.com" ]]; then
+      return 0
+    fi
+    sed_inplace "s|^export CLUSTER_ROUTER_BASE=.*|export CLUSTER_ROUTER_BASE=\"${detected}\"|" "${env_file}"
+    echo "Persisted CLUSTER_ROUTER_BASE=${detected} in ${env_file}"
+  fi
+}
+
+detect_cluster_router_base() {
+  local host="" detected="" old_base="${CLUSTER_ROUTER_BASE:-}"
+
+  if command -v oc >/dev/null 2>&1; then
+    host=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
+    if [[ -z "${host}" ]]; then
+      host=$(oc get route -n openshift-console -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
+    fi
+    if [[ -n "${host}" && "${host}" == console-openshift-console.* ]]; then
+      detected="${host#console-openshift-console.}"
+    fi
+
+    if [[ -z "${detected}" ]]; then
+      detected=$(detect_router_base_from_namespace_routes "${WORKSHOP_NAMESPACE}" 2>/dev/null || true)
+    fi
+  fi
+
+  if [[ -n "${detected}" ]]; then
+    if [[ -n "${old_base}" && "${old_base}" != "${detected}" && "${old_base}" != "apps.example.com" ]]; then
+      echo "Updating CLUSTER_ROUTER_BASE: ${old_base} -> ${detected} (current cluster)"
+    fi
+    export CLUSTER_ROUTER_BASE="${detected}"
+    persist_cluster_router_base "${detected}"
+    return 0
+  fi
+
+  if [[ -n "${old_base}" && "${old_base}" != "apps.example.com" ]]; then
     return 0
   fi
   echo "Set CLUSTER_ROUTER_BASE in scripts/workshop.env (e.g. apps.cluster-name.example.com)" >&2
@@ -101,6 +163,49 @@ require_oc() {
     echo "oc CLI is required" >&2
     exit 1
   }
+}
+
+# GNU sed uses -i; BSD sed (macOS) requires -i ''.
+sed_inplace() {
+  if sed --version >/dev/null 2>&1; then
+    sed -i "$@"
+  else
+    sed -i '' "$@"
+  fi
+}
+
+# GNU base64 uses -d; macOS/BSD base64 uses -D.
+base64_decode() {
+  if printf 'dGVzdA==' | base64 -d >/dev/null 2>&1; then
+    base64 -d
+  else
+    base64 -D
+  fi
+}
+
+# Substitute ${VAR} placeholders from stdin. Uses gettext envsubst when installed;
+# otherwise a pure-bash fallback (RHDAT / minimal sandboxes often lack gettext).
+workshop_envsubst() {
+  local var_spec="$1"
+  if command -v envsubst >/dev/null 2>&1; then
+    envsubst "${var_spec}"
+    return 0
+  fi
+
+  local content token name value
+  content=$(cat)
+  for token in ${var_spec}; do
+    name="${token#\$\{}"
+    name="${name%\}}"
+    if [[ "${name}" == "${token}" ]]; then
+      name="${token#\$}"
+    fi
+    [[ -z "${name}" ]] && continue
+    value="${!name-}"
+    content="${content//\$\{${name}\}/${value}}"
+    content="${content//\$${name}/${value}}"
+  done
+  printf '%s' "${content}"
 }
 
 ensure_project() {
@@ -114,17 +219,33 @@ ensure_project() {
 
 render_manifest() {
   local input="$1"
-  envsubst \
-    '${WORKSHOP_NAMESPACE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${WORKSHOP_GITHUB_ORG} ${WORKSHOP_GITHUB_REPO} ${WORKSHOP_BACKEND_IMAGE} ${WORKSHOP_FRONTEND_IMAGE} ${WORKSHOP_IMAGE_REGISTRY} ${RHDH_NAMESPACE} ${RHDH_INSTANCE_NAME} ${RHDH_APP_TITLE} ${GITOPS_NAMESPACE} ${ARGOCD_INSTANCE_NAME} ${ARGOCD_APP_NAME} ${PEOPLE_DB_NAME} ${PEOPLE_DB_USER} ${PEOPLE_DB_PASSWORD} ${PEOPLE_KEYCLOAK_USER} ${PEOPLE_KEYCLOAK_PASSWORD} ${PEOPLE_NOTIFICATION_TOKEN} ${KEYCLOAK_ADMIN_USER} ${KEYCLOAK_ADMIN_PASSWORD} ${KEYCLOAK_REALM} ${KEYCLOAK_CLIENT_ID} ${KEYCLOAK_URL} ${KEYCLOAK_HOST} ${OIDC_AUTH_SERVER_URL} ${OIDC_ENABLED} ${CLUSTER_ROUTER_BASE} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_KEYCLOAK_CLIENT_SECRET} ${RHDH_KEYCLOAK_USER} ${RHDH_KEYCLOAK_PASSWORD} ${RHDH_OIDC_CLIENT_SECRET} ${WORKSHOP_CATALOG_URL} ${BACKEND_SECRET} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${K8S_SA_TOKEN} ${K8S_CA_DATA} ${ORCHESTRATOR_DATA_INDEX_IMAGE} ${KEYCLOAK_SERVICE_USER} ${KEYCLOAK_SERVICE_PASSWORD} ${LIGHTSPEED_ENABLE_OPENAI} ${OPENAI_API_KEY} ${OPENAI_MODEL} ${LIGHTSPEED_VLLM_MAX_TOKENS} ${MCP_TOKEN} ${RHDH_HOST}' \
-    <"${input}"
+  local rendered
+
+  if [[ ! -f "${input}" ]]; then
+    echo "Manifest not found: ${input}" >&2
+    return 1
+  fi
+
+  rendered="$(
+    workshop_envsubst \
+      '${WORKSHOP_NAMESPACE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${WORKSHOP_GITHUB_ORG} ${WORKSHOP_GITHUB_REPO} ${WORKSHOP_BACKEND_IMAGE} ${WORKSHOP_FRONTEND_IMAGE} ${WORKSHOP_IMAGE_REGISTRY} ${RHDH_NAMESPACE} ${RHDH_INSTANCE_NAME} ${RHDH_APP_TITLE} ${GITOPS_NAMESPACE} ${ARGOCD_INSTANCE_NAME} ${ARGOCD_APP_NAME} ${PEOPLE_DB_NAME} ${PEOPLE_DB_USER} ${PEOPLE_DB_PASSWORD} ${PEOPLE_KEYCLOAK_USER} ${PEOPLE_KEYCLOAK_PASSWORD} ${PEOPLE_NOTIFICATION_TOKEN} ${KEYCLOAK_ADMIN_USER} ${KEYCLOAK_ADMIN_PASSWORD} ${KEYCLOAK_REALM} ${KEYCLOAK_CLIENT_ID} ${KEYCLOAK_URL} ${KEYCLOAK_HOST} ${OIDC_AUTH_SERVER_URL} ${OIDC_ENABLED} ${CLUSTER_ROUTER_BASE} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_KEYCLOAK_CLIENT_SECRET} ${RHDH_KEYCLOAK_USER} ${RHDH_KEYCLOAK_PASSWORD} ${RHDH_OIDC_CLIENT_SECRET} ${WORKSHOP_CATALOG_URL} ${BACKEND_SECRET} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${K8S_SA_TOKEN} ${K8S_CA_DATA} ${ORCHESTRATOR_DATA_INDEX_IMAGE} ${KEYCLOAK_SERVICE_USER} ${KEYCLOAK_SERVICE_PASSWORD} ${LIGHTSPEED_ENABLE_OPENAI} ${OPENAI_API_KEY} ${OPENAI_MODEL} ${LIGHTSPEED_VLLM_MAX_TOKENS} ${MCP_TOKEN} ${RHDH_HOST}' \
+      <"${input}"
+  )" || return 1
+
+  if [[ -z "${rendered//[[:space:]]/}" ]]; then
+    echo "render_manifest produced empty output for ${input} (check scripts/workshop.env exports)" >&2
+    return 1
+  fi
+
+  printf '%s' "${rendered}"
 }
 
 apply_rendered_dir() {
   local dir="$1"
   local file
-  find "${dir}" -type f \( -name '*.yaml' -o -name '*.yml' \) | sort | while IFS= read -r file; do
+  while IFS= read -r -d '' file; do
     render_manifest "${file}" | oc apply -f -
-  done
+  done < <(find "${dir}" -type f \( -name '*.yaml' -o -name '*.yml' \) -print0 | sort -z)
 }
 
 # Clear pending-install/upgrade Helm locks left by interrupted installs (API timeout, Ctrl+C).
@@ -191,6 +312,36 @@ resolve_rhdh_host() {
     || echo "redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
 }
 
+# Prefer an existing Developer Hub route host for Helm upgrades (sandbox-safe).
+# OpenShift sandboxes reject Route.spec.host when it does not match the assigned router domain.
+resolve_rhdh_helm_global_host() {
+  local host=""
+
+  host=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null || true)
+  if [[ -n "${host}" ]]; then
+    echo "${host}"
+    return 0
+  fi
+  host=$(get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null || true)
+  if [[ -n "${host}" ]]; then
+    echo "${host}"
+    return 0
+  fi
+  echo ""
+}
+
+resolve_argocd_route_host() {
+  if oc get route argocd-server -n "${GITOPS_NAMESPACE}" >/dev/null 2>&1; then
+    get_route_host "${GITOPS_NAMESPACE}" "argocd-server"
+    return 0
+  fi
+  if oc get route "${ARGOCD_INSTANCE_NAME}-server" -n "${GITOPS_NAMESPACE}" >/dev/null 2>&1; then
+    get_route_host "${GITOPS_NAMESPACE}" "${ARGOCD_INSTANCE_NAME}-server"
+    return 0
+  fi
+  echo ""
+}
+
 resolve_rhdh_deploy_name() {
   if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     echo "redhat-developer-hub"
@@ -252,6 +403,30 @@ clear_dynamic_plugins_install_lock() {
   echo "Cleared dynamic plugins install lock (if present)."
 }
 
+clear_aap_management_plugins_from_pvc() {
+  if ! oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local job_pod="workshop-aap-mgmt-plugins-clear"
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=true >/dev/null 2>&1 || true
+  oc run "${job_pod}" -n "${RHDH_NAMESPACE}" --restart=Never \
+    --image=registry.redhat.io/ubi9/ubi-minimal \
+    --overrides='{"spec":{"containers":[{"name":"clear","image":"registry.redhat.io/ubi9/ubi-minimal","command":["sh","-c","rm -rfv /mnt/internal-plugin-aap-management-dynamic-* /mnt/internal-plugin-aap-management-backend-dynamic-*; echo cleared-aap-mgmt-plugins"],"volumeMounts":[{"name":"pvc","mountPath":"/mnt"}]}],"volumes":[{"name":"pvc","persistentVolumeClaim":{"claimName":"dynamic-plugins-root"}}]}}' \
+    -- sleep 30 >/dev/null
+
+  local i
+  for i in $(seq 1 30); do
+    if oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null | grep -q cleared-aap-mgmt-plugins; then
+      break
+    fi
+    sleep 2
+  done
+  oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null || true
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  echo "Cleared stale AAP Management plugin directories from dynamic-plugins-root PVC (if present)."
+}
+
 wait_for_developer_hub_pods_gone() {
   local i count
   for i in $(seq 1 60); do
@@ -280,6 +455,11 @@ safe_rollout_developer_hub() {
   if developer_hub_uses_plugins_pvc "${deploy_name}" \
     || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     clear_dynamic_plugins_install_lock
+    if [[ "${CLEAR_AAP_MANAGEMENT_PLUGINS_FROM_PVC:-false}" == "true" \
+      || "${CLEAR_AAP_MANAGEMENT_PLUGINS_FROM_PVC:-false}" == "1" \
+      || "${CLEAR_AAP_MANAGEMENT_PLUGINS_FROM_PVC:-false}" == "yes" ]]; then
+      clear_aap_management_plugins_from_pvc
+    fi
   fi
 
   echo "Scaling ${deploy_name} back to ${replicas} replica(s)..."
@@ -292,7 +472,7 @@ load_mcp_token_from_cluster() {
 
   if oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     token="$(oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" \
-      -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+      -o jsonpath='{.data.token}' 2>/dev/null | base64_decode 2>/dev/null || true)"
     token="${token#Bearer }"
     if [[ -n "${token}" && "${token}" != "changeme" ]]; then
       echo "${token}"
@@ -473,13 +653,12 @@ PY
 }
 
 resolve_keycloak_urls() {
-  if [[ -z "${KEYCLOAK_URL:-}" || "${KEYCLOAK_URL}" == *'${'* ]]; then
-    if oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
-      KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")
-      export KEYCLOAK_URL="https://${KEYCLOAK_HOST}"
-    else
-      export KEYCLOAK_URL="https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
-    fi
+  if command -v oc >/dev/null 2>&1 \
+    && oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")
+    export KEYCLOAK_URL="https://${KEYCLOAK_HOST}"
+  elif [[ -z "${KEYCLOAK_URL:-}" || "${KEYCLOAK_URL}" == *'${'* ]]; then
+    export KEYCLOAK_URL="https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
   fi
   export OIDC_AUTH_SERVER_URL="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}"
   export KEYCLOAK_HOST="${KEYCLOAK_URL#https://}"
@@ -503,169 +682,6 @@ wait_keycloak_http_ready() {
   done
   echo "Keycloak is not reachable. Run ./scripts/repair-keycloak.sh" >&2
   return 1
-}
-
-# Returns 0 when ready, 1 when a repair was applied, 2 when repair is needed (dry-run).
-ensure_deployment_running() {
-  local deploy_name="${1}"
-  local namespace="${2}"
-  local desired_replicas="${3:-1}"
-  local timeout="${4:-300}"
-  local dry_run="${5:-false}"
-
-  if ! oc get deployment "${deploy_name}" -n "${namespace}" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  local replicas ready
-  replicas=$(oc get deployment "${deploy_name}" -n "${namespace}" -o jsonpath='{.spec.replicas}')
-  ready=$(oc get deployment "${deploy_name}" -n "${namespace}" \
-    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-  ready="${ready:-0}"
-
-  if [[ "${replicas}" -ge "${desired_replicas}" && "${ready}" -ge "${desired_replicas}" ]]; then
-    echo "OK   deployment/${deploy_name} (${namespace}) ready=${ready}/${replicas}"
-    return 0
-  fi
-
-  if [[ "${dry_run}" == "true" ]]; then
-    echo "DOWN deployment/${deploy_name} (${namespace}) ready=${ready}/${replicas} -> would scale to ${desired_replicas}"
-    return 2
-  fi
-
-  echo "Scaling deployment/${deploy_name} in ${namespace} to ${desired_replicas} (was ready=${ready}/${replicas})..."
-  oc scale "deployment/${deploy_name}" --replicas="${desired_replicas}" -n "${namespace}"
-  if ! oc rollout status "deployment/${deploy_name}" -n "${namespace}" --timeout="${timeout}s"; then
-    echo "WARN deployment/${deploy_name} (${namespace}) rollout did not finish in ${timeout}s" >&2
-    return 2
-  fi
-  echo "OK   deployment/${deploy_name} (${namespace}) scaled and ready"
-  return 1
-}
-
-# Returns 0 when ready, 1 when a repair was applied, 2 when repair is needed (dry-run).
-ensure_statefulset_running() {
-  local sts_name="${1}"
-  local namespace="${2}"
-  local desired_replicas="${3:-1}"
-  local timeout="${4:-300}"
-  local dry_run="${5:-false}"
-
-  if ! oc get statefulset "${sts_name}" -n "${namespace}" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  local replicas ready
-  replicas=$(oc get statefulset "${sts_name}" -n "${namespace}" -o jsonpath='{.spec.replicas}')
-  ready=$(oc get statefulset "${sts_name}" -n "${namespace}" \
-    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
-  ready="${ready:-0}"
-
-  if [[ "${replicas}" -ge "${desired_replicas}" && "${ready}" -ge "${desired_replicas}" ]]; then
-    echo "OK   statefulset/${sts_name} (${namespace}) ready=${ready}/${replicas}"
-    return 0
-  fi
-
-  if [[ "${dry_run}" == "true" ]]; then
-    echo "DOWN statefulset/${sts_name} (${namespace}) ready=${ready}/${replicas} -> would scale to ${desired_replicas}"
-    return 2
-  fi
-
-  echo "Scaling statefulset/${sts_name} in ${namespace} to ${desired_replicas} (was ready=${ready}/${replicas})..."
-  oc scale "statefulset/${sts_name}" --replicas="${desired_replicas}" -n "${namespace}"
-  if ! oc rollout status "statefulset/${sts_name}" -n "${namespace}" --timeout="${timeout}s"; then
-    echo "WARN statefulset/${sts_name} (${namespace}) rollout did not finish in ${timeout}s" >&2
-    return 2
-  fi
-  echo "OK   statefulset/${sts_name} (${namespace}) scaled and ready"
-  return 1
-}
-
-ensure_developer_hub_running() {
-  local dry_run="${1:-false}"
-  local deploy_name=""
-
-  if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-    deploy_name="redhat-developer-hub"
-  elif oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-    deploy_name="${RHDH_INSTANCE_NAME}"
-  else
-    return 0
-  fi
-
-  ensure_deployment_running "${deploy_name}" "${RHDH_NAMESPACE}" 1 600 "${dry_run}"
-}
-
-ensure_all_workshop_instances() {
-  local dry_run="${1:-false}"
-  local check_only="${2:-false}"
-  local rc=0
-  local item status
-
-  require_oc
-  echo "Checking workshop instances (workshop=${WORKSHOP_NAMESPACE}, rhdh=${RHDH_NAMESPACE})..."
-
-  local workloads=(
-    "statefulset:${RHDH_NAMESPACE}:redhat-developer-hub-postgresql:1:300"
-    "deployment:${WORKSHOP_NAMESPACE}:keycloak:1:600"
-    "deployment:${WORKSHOP_NAMESPACE}:workshop-catalog-server:1:300"
-    "deployment:${WORKSHOP_NAMESPACE}:people-postgres:1:300"
-    "deployment:${WORKSHOP_NAMESPACE}:people-backend:1:600"
-    "deployment:${WORKSHOP_NAMESPACE}:people-frontend:1:300"
-  )
-
-  if [[ "${AAP_MANAGEMENT_ENABLED:-false}" == "true" \
-    || "${AAP_MANAGEMENT_ENABLED:-false}" == "1" \
-    || "${AAP_MANAGEMENT_ENABLED:-false}" == "yes" ]]; then
-    workloads+=("deployment:${WORKSHOP_NAMESPACE}:aap-management-plugin-server:1:180")
-  fi
-
-  for item in "${workloads[@]}"; do
-    IFS=':' read -r kind namespace name desired timeout <<<"${item}"
-    status=0
-    if [[ "${kind}" == "statefulset" ]]; then
-      ensure_statefulset_running "${name}" "${namespace}" "${desired}" "${timeout}" "${dry_run}" || status=$?
-    else
-      ensure_deployment_running "${name}" "${namespace}" "${desired}" "${timeout}" "${dry_run}" || status=$?
-    fi
-    if (( status > rc )); then
-      rc=${status}
-    fi
-  done
-
-  status=0
-  ensure_developer_hub_running "${dry_run}" || status=$?
-  if (( status > rc )); then
-    rc=${status}
-  fi
-
-  if [[ "${dry_run}" == "true" || "${check_only}" == "true" ]]; then
-    if [[ "${rc}" -eq 2 ]]; then
-      echo "Some instances are scaled down or not ready."
-      return 1
-    fi
-    echo "All checked instances are running."
-    return 0
-  fi
-
-  if [[ "${rc}" -ge 1 ]]; then
-    if oc get deployment keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
-      wait_keycloak_http_ready || true
-    fi
-    if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-      local ready
-      ready=$(oc get pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" \
-        -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
-      if [[ "${ready}" != "True" ]]; then
-        echo "Restarting Developer Hub pod after dependency recovery..."
-        oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
-        oc rollout status deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --timeout=600s 2>/dev/null || true
-      fi
-    fi
-  fi
-
-  echo "Workshop instance check complete."
-  return 0
 }
 
 ensure_keycloak_running() {
@@ -860,7 +876,7 @@ verify_cluster_github_token() {
   fi
 
   secret_token="$(oc get secret rhdh-workshop-secrets -n "${namespace}" \
-    -o jsonpath='{.data.GITHUB_TOKEN}' | base64 -d)"
+    -o jsonpath='{.data.GITHUB_TOKEN}' | base64_decode)"
   if [[ -z "${secret_token}" || "${secret_token}" == "changeme" ]]; then
     echo "Cluster secret rhdh-workshop-secrets still has GITHUB_TOKEN=changeme." >&2
     return 1

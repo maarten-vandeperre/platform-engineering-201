@@ -12,13 +12,13 @@ import {
 } from '@material-ui/core';
 import { Alert } from '@material-ui/lab';
 import { useAapManagementApi } from '../plugin';
-import { AapJobTemplate, AapSurveyQuestion } from '../types';
+import { AapJobRef, AapJobTemplate, AapSurveyQuestion } from '../types';
 
 type LaunchTemplateDialogProps = {
   template: AapJobTemplate | null;
   open: boolean;
   onClose: () => void;
-  onLaunched: () => void;
+  onLaunched: (job: AapJobRef) => void;
 };
 
 function initialValues(questions: AapSurveyQuestion[]) {
@@ -61,6 +61,17 @@ function parseApiError(raw: unknown) {
   return String(raw);
 }
 
+function launchedJobRef(
+  template: AapJobTemplate,
+  response: { id: number; type?: string },
+): AapJobRef {
+  const jobType =
+    response.type === 'workflow_job' || template.templateType === 'workflow_job_template'
+      ? 'workflow_job'
+      : 'job';
+  return { id: response.id, jobType };
+}
+
 export function LaunchTemplateDialog({
   template,
   open,
@@ -97,9 +108,12 @@ export function LaunchTemplateDialog({
 
         if (spec.length === 0) {
           setLaunching(true);
-          await api.launchJobTemplate(template.id, template.templateType);
+          const launched = await api.launchJobTemplate(
+            template.id,
+            template.templateType,
+          );
           if (!cancelled) {
-            onLaunched();
+            onLaunched(launchedJobRef(template, launched));
             onClose();
           }
         }
@@ -147,8 +161,12 @@ export function LaunchTemplateDialog({
           return [question.variable, raw];
         }),
       );
-      await api.launchJobTemplate(template.id, template.templateType, extraVars);
-      onLaunched();
+      const launched = await api.launchJobTemplate(
+        template.id,
+        template.templateType,
+        extraVars,
+      );
+      onLaunched(launchedJobRef(template, launched));
       onClose();
     } catch (e) {
       setError(parseApiError(e));

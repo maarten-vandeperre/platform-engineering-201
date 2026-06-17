@@ -134,5 +134,87 @@ export async function createRouter(
     }
   });
 
+  router.get('/jobs/:id', async (req, res) => {
+    await requireUser(req);
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      throw new InputError('Invalid job id');
+    }
+    const jobType =
+      req.query.type === 'workflow_job' ? 'workflow_job' : 'job';
+
+    try {
+      const job = await client.getJob(id, jobType);
+      res.json(job);
+    } catch (error) {
+      logger.error(String(error));
+      throw new InputError(
+        `Failed to load job: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  });
+
+  router.get('/jobs/:id/stdout', async (req, res) => {
+    await requireUser(req);
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      throw new InputError('Invalid job id');
+    }
+    const jobType =
+      req.query.type === 'workflow_job' ? 'workflow_job' : 'job';
+
+    try {
+      const stdout = await client.getJobStdout(id, jobType);
+      res.json(stdout);
+    } catch (error) {
+      logger.error(String(error));
+      throw new InputError(
+        `Failed to load job stdout: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  });
+
+  router.get('/jobs/:id/events', async (req, res) => {
+    await requireUser(req);
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      throw new InputError('Invalid job id');
+    }
+    const jobType =
+      req.query.type === 'workflow_job' ? 'workflow_job' : 'job';
+    const page = parsePositiveInt(req.query.page, 1, 1000);
+    const pageSize = parsePositiveInt(req.query.page_size, 50, 200);
+
+    try {
+      const events = await client.getJobEvents(id, jobType, { page, pageSize });
+      res.json(events);
+    } catch (error) {
+      logger.error(String(error));
+      throw new InputError(
+        `Failed to load job events: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  });
+
+  router.get('/jobs/:id/task-logs', async (req, res) => {
+    await requireUser(req);
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      throw new InputError('Invalid job id');
+    }
+    const jobType =
+      req.query.type === 'workflow_job' ? 'workflow_job' : 'job';
+
+    try {
+      const taskLogs = await client.getJobTaskLogs(id, jobType);
+      res.json(taskLogs);
+    } catch (error) {
+      logger.error(String(error));
+      throw new InputError(
+        `Failed to load job task logs: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  });
+
   return router;
 }
