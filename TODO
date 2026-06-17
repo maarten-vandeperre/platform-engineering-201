@@ -15,4 +15,8 @@ mac versus linux
 ansible => add logs + link naar automation platform + end message with ip and info to connect
 
 
-https://devspaces.apps.rm2.thpm.p1.openshiftapps.com/#/dashboard/#https://github.com/maarten-vandeperre/platform-engineering-201?devfilePath=.devfile.yaml
+Dev Spaces (rm2):
+  Git repo URL field: https://github.com/maarten-vandeperre/platform-engineering-201
+  Devfile path: .devfile.yaml
+  Factory link: https://devspaces.apps.rm2.thpm.p1.openshiftapps.com/#https://github.com/maarten-vandeperre/platform-engineering-201?devfilePath=.devfile.yaml
+  (Do NOT paste the dashboard URL with #/dashboard/# — that is not a git repo.)
