@@ -3,6 +3,8 @@ metadata:
   name: platform-engineering-201
   displayName: Platform Engineering 201 Workshop
   description: Workshop workspace with Java 21, Maven, Node.js 22, and OpenShift tooling.
+  attributes:
+    che.eclipse.org/che-editor: che-incubator/che-code/latest
   tags:
     - java-21
     - nodejs-22
