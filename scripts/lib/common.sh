@@ -513,7 +513,12 @@ deployment_rollout_progress_line() {
 
   init_active="$(oc get pod -n "${namespace}" -l "${label_selector}" \
     -o json 2>/dev/null \
-    | jq -r '[.items[-1].status.initContainerStatuses[]? | select(.state.running == null and .state.terminated == null) | .name] | join(", ")' 2>/dev/null || true)"
+    | jq -r '
+      .items[-1].status.initContainerStatuses[]? as $c
+      | if $c.state.running then $c.name
+        elif ($c.state.waiting.reason // "") != "PodInitializing" then $c.name
+        else empty end
+      ' 2>/dev/null | head -1 || true)"
   if [[ -n "${init_active}" ]]; then
     init_hint=""
     if [[ "${rollout_kind}" == "developer-hub" ]]; then
