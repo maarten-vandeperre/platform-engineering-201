@@ -5,6 +5,48 @@ BIN_DIR="${HOME}/.local/bin"
 mkdir -p "${BIN_DIR}"
 export PATH="${BIN_DIR}:${PATH}"
 
+# Workshop requires Node.js 22.12+ (AAP Management plugin / yargs@18).
+node_version_ok() {
+  command -v node >/dev/null 2>&1 || return 1
+  node -e 'const [maj,min]=process.versions.node.split(".").map(Number); process.exit((maj===22&&min>=12)||maj>=23?0:1)'
+}
+
+ensure_shell_path() {
+  local line='export PATH="${HOME}/.local/bin:${PATH}"'
+  for rc in "${HOME}/.bashrc" "${HOME}/.zshrc"; do
+    [[ -f "${rc}" ]] || touch "${rc}"
+    grep -qF '.local/bin' "${rc}" 2>/dev/null || echo "${line}" >>"${rc}"
+  done
+}
+
+ensure_nvm_shell_init() {
+  local nvm_line='export NVM_DIR="${HOME}/.nvm"; [ -s "${NVM_DIR}/nvm.sh" ] && . "${NVM_DIR}/nvm.sh"'
+  for rc in "${HOME}/.bashrc" "${HOME}/.zshrc"; do
+    [[ -f "${rc}" ]] || touch "${rc}"
+    grep -qF 'nvm.sh' "${rc}" 2>/dev/null || echo "${nvm_line}" >>"${rc}"
+  done
+}
+
+source_nvm() {
+  export NVM_DIR="${HOME}/.nvm"
+  if [[ -s "${NVM_DIR}/nvm.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "${NVM_DIR}/nvm.sh"
+  fi
+}
+
+symlink_node_to_local_bin() {
+  source_nvm
+  if command -v node >/dev/null 2>&1 && [[ -n "${NVM_DIR:-}" ]]; then
+    local node_dir="${NVM_DIR}/versions/node/$(nvm version)"
+    if [[ -d "${node_dir}/bin" ]]; then
+      ln -sf "${node_dir}/bin/node" "${BIN_DIR}/node"
+      ln -sf "${node_dir}/bin/npm" "${BIN_DIR}/npm"
+      ln -sf "${node_dir}/bin/npx" "${BIN_DIR}/npx"
+    fi
+  fi
+}
+
 install_jq() {
   command -v jq >/dev/null 2>&1 && return 0
   curl -fsSL -o "${BIN_DIR}/jq" \
@@ -31,29 +73,30 @@ install_helm() {
 }
 
 install_node() {
+  if node_version_ok; then
+    symlink_node_to_local_bin
+    return 0
+  fi
   if command -v node >/dev/null 2>&1; then
-    if node -e 'const [maj,min]=process.versions.node.split(".").map(Number); process.exit((maj===20&&min>=19)||(maj===22&&min>=12)||maj>=23?0:1)'; then
-      return 0
-    fi
-    echo "Node.js $(node --version) is too old; installing Node.js 22 via nvm..."
+    echo "Node.js $(node --version) does not meet workshop requirement (>=22.12); installing Node.js 22 via nvm..."
+  else
+    echo "Node.js not found; installing Node.js 22 via nvm..."
   fi
   export NVM_DIR="${HOME}/.nvm"
   if [[ ! -s "${NVM_DIR}/nvm.sh" ]]; then
     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
   fi
-  # shellcheck source=/dev/null
-  source "${NVM_DIR}/nvm.sh"
+  source_nvm
   nvm install 22
   nvm alias default 22
-  ln -sf "${NVM_DIR}/versions/node/$(nvm version)/bin/node" "${BIN_DIR}/node" 2>/dev/null || true
-  ln -sf "${NVM_DIR}/versions/node/$(nvm version)/bin/npm" "${BIN_DIR}/npm" 2>/dev/null || true
+  nvm use default
+  symlink_node_to_local_bin
+  ensure_nvm_shell_init
   corepack enable 2>/dev/null || true
   corepack prepare yarn@1.22.22 --activate 2>/dev/null || npm install -g yarn
 }
 
-grep -q '\.local/bin' "${HOME}/.bashrc" 2>/dev/null \
-  || echo 'export PATH="${HOME}/.local/bin:${PATH}"' >>"${HOME}/.bashrc"
-
+ensure_shell_path
 install_jq
 install_oc
 install_helm
@@ -64,3 +107,5 @@ if command -v java >/dev/null 2>&1; then
 fi
 echo "JAVA_HOME=${JAVA_HOME:-not set}"
 java -version 2>&1 | head -1
+echo "node $(node --version 2>/dev/null || echo missing)"
+echo "npm $(npm --version 2>/dev/null || echo missing)"
