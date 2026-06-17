@@ -467,6 +467,32 @@ safe_rollout_developer_hub() {
   oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout="${timeout}"
 }
 
+install_pyyaml_via_os_packages() {
+  local -a attempted=()
+  local mgr
+
+  for mgr in microdnf dnf; do
+    command -v "${mgr}" >/dev/null 2>&1 || continue
+
+    if command -v sudo >/dev/null 2>&1 && [[ "$(id -u)" -ne 0 ]]; then
+      attempted+=("sudo ${mgr} install -y python3-pyyaml")
+      if sudo "${mgr}" install -y python3-pyyaml >/dev/null 2>&1 \
+        && python3 -c 'import yaml' 2>/dev/null; then
+        return 0
+      fi
+    fi
+
+    attempted+=("${mgr} install -y python3-pyyaml")
+    if "${mgr}" install -y python3-pyyaml >/dev/null 2>&1 \
+      && python3 -c 'import yaml' 2>/dev/null; then
+      return 0
+    fi
+  done
+
+  printf '%s\n' "${attempted[@]}"
+  return 1
+}
+
 ensure_pyyaml() {
   if python3 -c 'import yaml' 2>/dev/null; then
     return 0
@@ -474,35 +500,52 @@ ensure_pyyaml() {
 
   echo "PyYAML not found; installing for Developer Hub app-config scripts..." >&2
 
+  local -a attempted=()
+  local os_attempted
+
+  os_attempted="$(install_pyyaml_via_os_packages || true)"
+  if [[ -n "${os_attempted}" ]]; then
+    while IFS= read -r line; do
+      [[ -n "${line}" ]] && attempted+=("${line}")
+    done <<<"${os_attempted}"
+  fi
+  if python3 -c 'import yaml' 2>/dev/null; then
+    return 0
+  fi
+
+  attempted+=("python3 -m ensurepip + python3 -m pip install pyyaml")
+
   if ! python3 -m pip --version >/dev/null 2>&1; then
     python3 -m ensurepip --user --default-pip 2>/dev/null \
       || python3 -m ensurepip --default-pip 2>/dev/null \
       || true
   fi
 
-  if ! python3 -m pip --version >/dev/null 2>&1; then
-    echo "ERROR: pip is not available. Install PyYAML manually: python3 -m pip install --user pyyaml" >&2
-    return 1
-  fi
-
-  local -a pip_install=(python3 -m pip install)
-  if ! python3 -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
-    pip_install+=(--user)
-    if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
-      pip_install+=(--break-system-packages)
+  if python3 -m pip --version >/dev/null 2>&1; then
+    local -a pip_install=(python3 -m pip install)
+    if ! python3 -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
+      pip_install+=(--user)
+      if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
+        pip_install+=(--break-system-packages)
+      fi
     fi
-  fi
-  pip_install+=(-q pyyaml)
-
-  if ! "${pip_install[@]}"; then
-    echo "ERROR: failed to install PyYAML." >&2
-    return 1
+    pip_install+=(-q pyyaml)
+    "${pip_install[@]}" || true
+  else
+    attempted+=("python3 -m pip install --user pyyaml (pip unavailable after ensurepip)")
   fi
 
-  python3 -c 'import yaml' 2>/dev/null || {
-    echo "ERROR: PyYAML install did not succeed." >&2
-    return 1
-  }
+  if python3 -c 'import yaml' 2>/dev/null; then
+    return 0
+  fi
+
+  echo "ERROR: failed to install PyYAML. Attempted:" >&2
+  for method in "${attempted[@]}"; do
+    echo "  - ${method}" >&2
+  done
+  echo "Install manually (RHEL/UBI): sudo dnf install -y python3-pyyaml" >&2
+  echo "  or: sudo microdnf install -y python3-pyyaml" >&2
+  return 1
 }
 
 load_mcp_token_from_cluster() {
