@@ -14,13 +14,13 @@ if [[ ! -f "${WORKFLOW_FILE}" ]]; then
 fi
 
 SOURCE_SQL="$(sed "s/'/''/g" "${WORKFLOW_FILE}")"
+METADATA_JSON="{\"kogito.service.url\": \"${WORKFLOW_SERVICE_URL}\"}"
 
 psql -h "${PGHOST}" -U "${PGUSER}" -d "${PGDATABASE}" -v ON_ERROR_STOP=1 <<EOSQL
 SET search_path TO "data-index-service";
-DELETE FROM definitions_metadata WHERE process_id = 'create-person';
 DELETE FROM definitions_annotations WHERE process_id = 'create-person';
 DELETE FROM definitions WHERE id = 'create-person';
-INSERT INTO definitions (id, version, name, type, source, endpoint, description)
+INSERT INTO definitions (id, version, name, type, source, endpoint, description, metadata)
 VALUES (
   'create-person',
   '1.0',
@@ -28,11 +28,10 @@ VALUES (
   'SW',
   convert_to('${SOURCE_SQL}', 'UTF8'),
   '${WORKFLOW_ENDPOINT}',
-  'Creates a person in the People REST API using first name, last name, and age'
+  'Creates a person in the People REST API using first name, last name, and age',
+  '${METADATA_JSON}'::jsonb
 );
-INSERT INTO definitions_metadata (process_id, process_version, value, key)
-VALUES ('create-person', '1.0', '${WORKFLOW_SERVICE_URL}', 'kogito.service.url');
-INSERT INTO definitions_annotations (value, process_id, process_version)
+INSERT INTO definitions_annotations (annotation, process_id, process_version)
 VALUES ('workflow-type/infrastructure', 'create-person', '1.0');
 EOSQL
 

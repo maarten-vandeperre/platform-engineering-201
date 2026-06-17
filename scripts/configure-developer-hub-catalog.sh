@@ -8,7 +8,13 @@ source "${SCRIPT_DIR}/lib/common.sh"
 echo "Updating Developer Hub catalog entities in ${WORKSHOP_NAMESPACE}..."
 
 require_oc
+set +e
 ensure_keycloak_running
+keycloak_ok=$?
+set -e
+if [[ "${keycloak_ok}" -ne 0 ]]; then
+  echo "Warning: Keycloak not reachable; continuing catalog update with KEYCLOAK_URL from workshop.env." >&2
+fi
 ensure_rhdh_postgres
 
 if [[ -z "${KEYCLOAK_URL:-}" ]] && oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
@@ -119,7 +125,7 @@ fi
 
 if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   echo "Restarting Developer Hub to reload catalog..."
-  oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
+  safe_rollout_developer_hub redhat-developer-hub 900s
 elif oc get backstage "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   echo "Developer Hub operator instance detected; catalog ConfigMap updated."
 else

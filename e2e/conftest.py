@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -16,6 +17,30 @@ def _env(name: str, default: str = "") -> str:
     return os.environ.get(name, default).strip()
 
 
+def _oc_route_url(route_name: str, namespace: str) -> str:
+    try:
+        result = subprocess.run(
+            [
+                "oc",
+                "get",
+                "route",
+                route_name,
+                "-n",
+                namespace,
+                "-o",
+                "jsonpath={.spec.host}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=20,
+            check=True,
+        )
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return ""
+    host = result.stdout.strip()
+    return f"https://{host}" if host else ""
+
+
 @pytest.fixture(scope="session")
 def workshop_config():
     namespace = _env("WORKSHOP_NAMESPACE", "rh-ee-mvandepe-dev")
@@ -24,16 +49,21 @@ def workshop_config():
     default_backend = f"https://people-backend-{namespace}.{router_base}"
     default_frontend = f"https://people-frontend-{namespace}.{router_base}"
     default_keycloak = f"https://keycloak-{namespace}.{router_base}"
+    default_catalog = f"https://workshop-catalog-server-{namespace}.{router_base}"
+
+    rhdh_url = _env("RHDH_URL") or _oc_route_url("redhat-developer-hub", namespace) or default_rhdh
+    backend_url = _env("PEOPLE_BACKEND_URL") or _oc_route_url("people-backend", namespace) or default_backend
+    frontend_url = _env("PEOPLE_FRONTEND_URL") or _oc_route_url("people-frontend", namespace) or default_frontend
+    keycloak_url = _env("KEYCLOAK_URL") or _oc_route_url("keycloak", namespace) or default_keycloak
+    catalog_url = _env("CATALOG_SERVER_URL") or _oc_route_url("workshop-catalog-server", namespace) or default_catalog
+
     return {
         "namespace": namespace,
-        "rhdh_url": _env("RHDH_URL", default_rhdh).rstrip("/"),
-        "people_backend_url": _env("PEOPLE_BACKEND_URL", default_backend).rstrip("/"),
-        "people_frontend_url": _env("PEOPLE_FRONTEND_URL", default_frontend).rstrip("/"),
-        "catalog_server_url": _env(
-            "CATALOG_SERVER_URL",
-            f"https://workshop-catalog-server-{namespace}.{router_base}",
-        ).rstrip("/"),
-        "keycloak_url": _env("KEYCLOAK_URL", default_keycloak).rstrip("/"),
+        "rhdh_url": rhdh_url.rstrip("/"),
+        "people_backend_url": backend_url.rstrip("/"),
+        "people_frontend_url": frontend_url.rstrip("/"),
+        "catalog_server_url": catalog_url.rstrip("/"),
+        "keycloak_url": keycloak_url.rstrip("/"),
         "keycloak_realm": _env("KEYCLOAK_REALM", "workshop"),
         "people_client_id": _env("KEYCLOAK_CLIENT_ID", "people-service"),
         "people_username": _env("PEOPLE_KEYCLOAK_USER", "user"),

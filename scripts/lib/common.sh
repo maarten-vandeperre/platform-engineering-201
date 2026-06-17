@@ -471,13 +471,12 @@ PY
 }
 
 resolve_keycloak_urls() {
-  if [[ -z "${KEYCLOAK_URL:-}" || "${KEYCLOAK_URL}" == *'${'* ]]; then
-    if oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
-      KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")
-      export KEYCLOAK_URL="https://${KEYCLOAK_HOST}"
-    else
-      export KEYCLOAK_URL="https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
-    fi
+  if command -v oc >/dev/null 2>&1 \
+    && oc get route keycloak -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
+    KEYCLOAK_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "keycloak")
+    export KEYCLOAK_URL="https://${KEYCLOAK_HOST}"
+  elif [[ -z "${KEYCLOAK_URL:-}" || "${KEYCLOAK_URL}" == *'${'* ]]; then
+    export KEYCLOAK_URL="https://keycloak-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
   fi
   export OIDC_AUTH_SERVER_URL="${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}"
   export KEYCLOAK_HOST="${KEYCLOAK_URL#https://}"

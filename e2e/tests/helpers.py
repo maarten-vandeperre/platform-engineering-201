@@ -230,6 +230,38 @@ def dismiss_onboarding(driver):
         time.sleep(1)
 
 
+def wait_for_techdocs_page(driver, config, *needles):
+    """Wait for TechDocs content and fail fast on known build errors."""
+    import time
+
+    import pytest
+    from selenium.webdriver.common.by import By
+
+    forbidden = (
+        "fetchurlreader does not implement readtree",
+        "building a newer version of this documentation failed",
+        "error 404: notfounderror: page not found",
+        "looks like someone dropped the mic",
+        "erofs: read-only file system",
+    )
+    deadline = time.time() + config["timeout"]
+    while time.time() < deadline:
+        text = driver.find_element(By.TAG_NAME, "body").text
+        lowered = text.lower()
+        for bad in forbidden:
+            if bad in lowered:
+                pytest.fail(
+                    f"TechDocs build error ({bad!r}) at {driver.current_url}\n{text[:500]}"
+                )
+        if all(needle.lower() in lowered for needle in needles):
+            return text
+        time.sleep(3)
+    pytest.fail(
+        "TechDocs page did not render expected content. "
+        f"URL={driver.current_url} needles={needles}"
+    )
+
+
 def open_entity_tab(driver, tab_path, tab_label=None):
     """Open a catalog entity tab by route suffix (e.g. ci, kubernetes)."""
     import time

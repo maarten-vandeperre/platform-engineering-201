@@ -33,32 +33,50 @@ build_flat_techdocs_configmap() {
     | oc apply -f -
 }
 
+deployment_has_techdocs() {
+  oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" -o json \
+    | jq -e '.spec.template.spec.initContainers[] | select(.name == "prepare-techdocs")' >/dev/null 2>&1
+}
+
+backstage_has_techdocs_mount() {
+  oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" -o json \
+    | jq -e '.spec.template.spec.containers[]
+       | select(.name == "backstage-backend")
+       | .volumeMounts[]
+       | select(.name == "techdocs-workspace" and .mountPath == "/catalog/techdocs" and (.readOnly // false) == false)' >/dev/null 2>&1
+}
+
+backstage_has_catalog_entities_mount() {
+  oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" -o json \
+    | jq -e '.spec.template.spec.containers[]
+       | select(.name == "backstage-backend")
+       | .volumeMounts[]
+       | select(.name == "catalog-entities" and .mountPath == "/catalog/entities.yaml")' >/dev/null 2>&1
+}
+
 echo "Preparing TechDocs file sources for Developer Hub in ${RHDH_NAMESPACE}..."
 build_flat_techdocs_configmap "quarkus-guide"
 build_flat_techdocs_configmap "adrs"
 
-echo "Patching Developer Hub deployment with TechDocs init container..."
-if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" \
-  -o jsonpath='{.spec.template.metadata.annotations.workshop\.platform-engineering/techdocs}' 2>/dev/null \
-  | grep -q enabled; then
-  echo "TechDocs init container already configured; skipping deployment rollout."
+if deployment_has_techdocs && backstage_has_techdocs_mount && backstage_has_catalog_entities_mount; then
+  echo "TechDocs init container and volume mounts already configured."
   exit 0
 fi
 
-replicas="$(oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" -o jsonpath='{.spec.replicas}')"
-if [[ -z "${replicas}" || "${replicas}" == "0" ]]; then
-  replicas=1
-fi
-
-echo "Scaling Developer Hub to 0 to avoid quota overlap during rollout..."
-oc scale deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --replicas=0
-oc rollout status deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --timeout=300s || true
-
+echo "Patching Developer Hub deployment with TechDocs init container..."
 render_manifest "${MANIFESTS_DIR}/developer-hub/rhdh-techdocs-deployment-patch.yaml" \
   | oc patch deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" --type=strategic --patch-file=/dev/stdin
 
-echo "Scaling Developer Hub back to ${replicas} replica(s)..."
-oc scale deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --replicas="${replicas}"
-oc rollout status deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --timeout=600s
+echo "Rolling out Developer Hub to apply TechDocs volumes..."
+if developer_hub_uses_plugins_pvc redhat-developer-hub \
+  || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+  safe_rollout_developer_hub redhat-developer-hub 900s
+else
+  oc rollout restart deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}"
+  oc rollout status deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --timeout=600s
+fi
 
 echo "TechDocs volumes configured on Developer Hub deployment."
+echo "Open Documentation tabs:"
+echo "  /catalog/default/component/quarkus-workshop-guide/docs"
+echo "  /catalog/default/component/platform-architecture-records/docs"
