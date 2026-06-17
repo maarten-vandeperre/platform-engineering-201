@@ -1,4 +1,4 @@
-schemaVersion: 2.2.0
+schemaVersion: 2.1.0
 metadata:
   name: platform-engineering-201
   displayName: Platform Engineering 201 Workshop
@@ -14,14 +14,12 @@ metadata:
   language: java
 
 components:
-  # Primary: build custom image from devfile/Dockerfile (Java 25 + all CLI tools).
+  # Devfile 2.1.0: container.image only (no image/dockerfile component type).
+  # Uses ubi9/openjdk-25; workspace-setup runs devfile/install-tools.sh for Node 22, oc, helm, etc.
+  # Optional: build devfile/Dockerfile and set image to your registry tag for pre-baked tools.
   - name: dev
-    image:
-      imageName: platform-engineering-201-workspace:latest
-      dockerfile:
-        uri: Dockerfile
-        buildContext: devfile
     container:
+      image: registry.access.redhat.com/ubi9/openjdk-25:latest
       mountSources: true
       memoryLimit: 12Gi
       memoryRequest: 4Gi
@@ -73,7 +71,6 @@ components:
 
 commands:
   - id: workspace-setup
-    label: 1. Workspace setup
     exec:
       component: dev
       commandLine: |
@@ -100,6 +97,7 @@ commands:
 
         if ! command -v node >/dev/null 2>&1 || ! command -v oc >/dev/null 2>&1; then
           bash devfile/install-tools.sh
+          export PATH="${HOME}/.local/bin:${PATH}"
         fi
 
         if ! node -e 'const [maj,min]=process.versions.node.split(".").map(Number); process.exit((maj===20&&min>=19)||(maj===22&&min>=12)||maj>=23?0:1)'; then
@@ -123,7 +121,6 @@ commands:
         helm version --short 2>/dev/null || echo "helm: not installed"
 
   - id: oc-login
-    label: 2. oc login
     exec:
       component: dev
       commandLine: |
@@ -137,7 +134,6 @@ commands:
         oc login
 
   - id: bootstrap-workshop
-    label: 3. Bootstrap workshop
     exec:
       component: dev
       commandLine: |
@@ -147,7 +143,6 @@ commands:
         ./scripts/bootstrap-workshop.sh
 
   - id: setup-developer-hub-config
-    label: Setup Developer Hub config
     exec:
       component: dev
       commandLine: |
@@ -157,7 +152,6 @@ commands:
         ./scripts/setup-developer-hub-config.sh
 
   - id: validate-workshop
-    label: Validate workshop
     exec:
       component: dev
       commandLine: |
@@ -167,32 +161,37 @@ commands:
         ./scripts/validate-workshop.sh
 
   - id: build-people-backend
-    label: Build People Service backend (Maven)
     exec:
       component: dev
       commandLine: mvn -B -f apps/people-service/backend/pom.xml clean package -DskipTests
+      group:
+        kind: build
 
   - id: build-people-frontend
-    label: Build People Service frontend (npm)
     exec:
       component: dev
       commandLine: |
         set -euo pipefail
         cd apps/people-service/frontend && npm ci && npm run build
+      group:
+        kind: build
 
   - id: build-aap-management-plugin
-    label: Build AAP Management plugin (yarn)
     exec:
       component: dev
       commandLine: ./scripts/build-custom-aap-management-plugin.sh
+      group:
+        kind: build
 
   - id: dev-people-frontend
-    label: Dev — People frontend (Vite)
     exec:
       component: dev
       commandLine: |
         set -euo pipefail
         cd apps/people-service/frontend && npm ci && npm run dev -- --host 0.0.0.0 --port 5173
+      group:
+        kind: run
+        isDefault: true
 
 events:
   postStart:
