@@ -516,8 +516,9 @@ ensure_pyyaml() {
   attempted+=("python3 -m ensurepip + python3 -m pip install pyyaml")
 
   if ! python3 -m pip --version >/dev/null 2>&1; then
-    python3 -m ensurepip --user --default-pip 2>/dev/null \
-      || python3 -m ensurepip --default-pip 2>/dev/null \
+    # ensurepip writes to stdout; never capture this function inside $().
+    python3 -m ensurepip --user --default-pip >/dev/null 2>&1 \
+      || python3 -m ensurepip --default-pip >/dev/null 2>&1 \
       || true
   fi
 
@@ -530,7 +531,7 @@ ensure_pyyaml() {
       fi
     fi
     pip_install+=(-q pyyaml)
-    "${pip_install[@]}" || true
+    "${pip_install[@]}" >/dev/null 2>&1 || true
   else
     attempted+=("python3 -m pip install --user pyyaml (pip unavailable after ensurepip)")
   fi
@@ -549,7 +550,6 @@ ensure_pyyaml() {
 }
 
 load_mcp_token_from_cluster() {
-  ensure_pyyaml
   local token app_config
 
   if oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
@@ -597,6 +597,8 @@ ensure_mcp_token() {
     export MCP_TOKEN
     return 0
   fi
+
+  ensure_pyyaml
 
   if MCP_TOKEN="$(load_mcp_token_from_cluster)"; then
     export MCP_TOKEN

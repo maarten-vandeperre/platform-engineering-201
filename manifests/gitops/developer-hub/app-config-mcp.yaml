@@ -7,5 +7,5 @@ backend:
     externalAccess:
       - type: static
         options:
-          token: ${MCP_TOKEN}
+          token: "${MCP_TOKEN}"
           subject: mcp-clients

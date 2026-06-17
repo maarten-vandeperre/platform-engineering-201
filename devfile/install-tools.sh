@@ -100,8 +100,8 @@ install_pyyaml() {
   attempted+=("python3 -m ensurepip + python3 -m pip install pyyaml")
 
   if ! python3 -m pip --version >/dev/null 2>&1; then
-    python3 -m ensurepip --user --default-pip 2>/dev/null \
-      || python3 -m ensurepip --default-pip 2>/dev/null \
+    python3 -m ensurepip --user --default-pip >/dev/null 2>&1 \
+      || python3 -m ensurepip --default-pip >/dev/null 2>&1 \
       || true
   fi
 
@@ -114,7 +114,7 @@ install_pyyaml() {
       fi
     fi
     pip_install+=(-q pyyaml)
-    "${pip_install[@]}" || true
+    "${pip_install[@]}" >/dev/null 2>&1 || true
   else
     attempted+=("python3 -m pip install --user pyyaml (pip unavailable after ensurepip)")
   fi
