@@ -25,8 +25,8 @@ ERROR: AAP_ENABLED=true but Red Hat registry credentials are missing.
 Ansible OCI dynamic plugins are pulled from registry.redhat.io during install-dynamic-plugins.
 Create a service account at https://access.redhat.com/terms-based-registry/accounts and set:
 
-  export RH_REGISTRY_USERNAME=<service-account-name>
-  export RH_REGISTRY_TOKEN=<token>
+  export RH_REGISTRY_USERNAME=<username-from-token-tab>  # e.g. 11009103|my-sa-name
+  export RH_REGISTRY_TOKEN=<token-from-token-tab>      # JWT (eyJ...) is normal
 
 Or run:
 
@@ -40,15 +40,18 @@ rh_registry_credentials_invalid_message() {
   cat <<EOF >&2
 ERROR: Red Hat registry credentials are invalid (${detail}).
 
-RH_REGISTRY_USERNAME and RH_REGISTRY_TOKEN must come from a Red Hat Container Registry
-service account — NOT your AAP login, OpenShift token, or GitHub PAT.
+RH_REGISTRY_USERNAME and RH_REGISTRY_TOKEN must come from the Token Information tab of a
+Red Hat Container Registry service account — NOT your AAP login or OpenShift oc token.
 
 Create or open a service account at:
   https://access.redhat.com/terms-based-registry/accounts
 
+The registry token is a JWT (starts with eyJ...) — that is expected. Do not use OpenShift
+tokens shaped like namespace:eyJ...
+
 Then set in scripts/workshop.env:
-  export RH_REGISTRY_USERNAME=<service-account-name>
-  export RH_REGISTRY_TOKEN=<service-account-token>
+  export RH_REGISTRY_USERNAME=<username-from-token-tab>  # e.g. 11009103|my-sa-name
+  export RH_REGISTRY_TOKEN=<token-from-token-tab>
 
 Re-run:
   ./scripts/setup-developer-hub-aap.sh --force-rollout
@@ -61,14 +64,15 @@ sanity_check_rh_registry_token() {
   local user="$1"
   local token="$2"
 
-  if [[ "${token}" == *":eyJ"* ]] || [[ "${token}" == eyJ* ]]; then
+  # RH registry service account tokens are JWTs (eyJ...). Reject OpenShift SA tokens only.
+  if [[ "${token}" == *":eyJ"* ]]; then
     rh_registry_credentials_invalid_message \
-      "RH_REGISTRY_TOKEN looks like an OpenShift/JWT token — use the registry service account token instead"
+      "RH_REGISTRY_TOKEN looks like an OpenShift service account token (namespace:eyJ...) — use the password from the registry Token Information tab"
     return 1
   fi
-  if [[ "${#token}" -gt 512 ]]; then
+  if [[ "${#token}" -gt 8192 ]]; then
     rh_registry_credentials_invalid_message \
-      "RH_REGISTRY_TOKEN is unusually long — paste only the registry service account token"
+      "RH_REGISTRY_TOKEN is unusually long — paste only the token from the Token Information tab"
     return 1
   fi
   if [[ -z "${user}" || "${user}" == "changeme" || -z "${token}" || "${token}" == "changeme" ]]; then
