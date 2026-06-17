@@ -20,3 +20,11 @@ Dev Spaces (rm2):
   Devfile path: .devfile.yaml
   Factory link: https://devspaces.apps.rm2.thpm.p1.openshiftapps.com/#https://github.com/maarten-vandeperre/platform-engineering-201?devfilePath=.devfile.yaml
   (Do NOT paste the dashboard URL with #/dashboard/# — that is not a git repo.)
+
+
+cd /projects/platform-engineering-201
+bash devfile/install-tools.sh
+source ~/.nvm/nvm.sh
+
+python3 -m pip install --user pyyaml
+./scripts/setup-developer-hub-config.sh

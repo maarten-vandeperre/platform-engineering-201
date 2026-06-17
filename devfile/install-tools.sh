@@ -54,6 +54,25 @@ install_jq() {
   chmod +x "${BIN_DIR}/jq"
 }
 
+install_pyyaml() {
+  python3 -c 'import yaml' 2>/dev/null && return 0
+  echo "Installing PyYAML for workshop scripts..."
+  if ! python3 -m pip --version >/dev/null 2>&1; then
+    python3 -m ensurepip --user --default-pip 2>/dev/null \
+      || python3 -m ensurepip --default-pip 2>/dev/null \
+      || true
+  fi
+  local -a pip_install=(python3 -m pip install)
+  if ! python3 -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
+    pip_install+=(--user)
+    if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
+      pip_install+=(--break-system-packages)
+    fi
+  fi
+  pip_install+=(-q pyyaml)
+  "${pip_install[@]}"
+}
+
 install_oc() {
   command -v oc >/dev/null 2>&1 && return 0
   curl -fsSL https://mirror.openshift.com/pub/openshift-v4/clients/ocp/stable/openshift-client-linux.tar.gz \
@@ -98,6 +117,7 @@ install_node() {
 
 ensure_shell_path
 install_jq
+install_pyyaml
 install_oc
 install_helm
 install_node

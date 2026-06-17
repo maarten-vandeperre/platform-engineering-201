@@ -467,7 +467,46 @@ safe_rollout_developer_hub() {
   oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout="${timeout}"
 }
 
+ensure_pyyaml() {
+  if python3 -c 'import yaml' 2>/dev/null; then
+    return 0
+  fi
+
+  echo "PyYAML not found; installing for Developer Hub app-config scripts..." >&2
+
+  if ! python3 -m pip --version >/dev/null 2>&1; then
+    python3 -m ensurepip --user --default-pip 2>/dev/null \
+      || python3 -m ensurepip --default-pip 2>/dev/null \
+      || true
+  fi
+
+  if ! python3 -m pip --version >/dev/null 2>&1; then
+    echo "ERROR: pip is not available. Install PyYAML manually: python3 -m pip install --user pyyaml" >&2
+    return 1
+  fi
+
+  local -a pip_install=(python3 -m pip install)
+  if ! python3 -c 'import sys; raise SystemExit(0 if sys.prefix != sys.base_prefix else 1)' 2>/dev/null; then
+    pip_install+=(--user)
+    if python3 -m pip install --help 2>/dev/null | grep -q -- '--break-system-packages'; then
+      pip_install+=(--break-system-packages)
+    fi
+  fi
+  pip_install+=(-q pyyaml)
+
+  if ! "${pip_install[@]}"; then
+    echo "ERROR: failed to install PyYAML." >&2
+    return 1
+  fi
+
+  python3 -c 'import yaml' 2>/dev/null || {
+    echo "ERROR: PyYAML install did not succeed." >&2
+    return 1
+  }
+}
+
 load_mcp_token_from_cluster() {
+  ensure_pyyaml
   local token app_config
 
   if oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
@@ -530,6 +569,7 @@ ensure_mcp_token() {
 }
 
 sync_mcp_token_in_app_config() {
+  ensure_pyyaml
   ensure_mcp_token
 
   render_manifest "${MANIFESTS_DIR}/developer-hub/lightspeed-mcp-token-secret.yaml" | oc apply -f -
@@ -613,6 +653,7 @@ PY
 }
 
 merge_mcp_into_app_config() {
+  ensure_pyyaml
   local base_file="$1"
   local mcp_file="$2"
   local output_file="$3"

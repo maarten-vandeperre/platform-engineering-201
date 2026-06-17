@@ -8,6 +8,7 @@ RUN dnf install -y \
       jq \
       git \
       python3 \
+      python3-pip \
       perl \
       openssl \
       curl \
@@ -17,6 +18,8 @@ RUN dnf install -y \
       procps-ng \
       findutils \
     && dnf clean all
+
+RUN pip3 install --no-cache-dir pyyaml
 
 # Node.js 22 LTS (>=22.12; required by yargs@18 and AAP Management plugin build)
 RUN curl -fsSL https://rpm.nodesource.com/setup_22.x | bash - \
