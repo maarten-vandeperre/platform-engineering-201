@@ -90,6 +90,9 @@ AAP_MANAGEMENT_ENABLED=true apply_dynamic_plugins_config
 deploy_name="$(resolve_rhdh_deploy_name)"
 if [[ "${NO_ROLLOUT}" != "true" ]] && oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   echo "Rolling out Developer Hub to load updated AAP Management plugins..."
+  # RHDH install-dynamic-plugins leaves stale dynamic-plugin-config.hash entries on the
+  # PVC when plugin integrity changes; the next boot installs then deletes the frontend bundle.
+  export CLEAR_AAP_MANAGEMENT_PLUGINS_FROM_PVC=true
   safe_rollout_developer_hub "${deploy_name}" "$(rollout_timeout_for_config)"
 fi
 

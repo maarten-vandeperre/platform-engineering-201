@@ -73,22 +73,86 @@ argocd_skip_message() {
   echo "Argo CD skipped (Helm path default). Set SKIP_ARGOCD=false in workshop.env for GitOps CD tab."
 }
 
-detect_cluster_router_base() {
-  local host=""
-  host=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
-  if [[ -z "${host}" ]]; then
-    host=$(oc get route -n openshift-console -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
-  fi
-  if [[ -n "${host}" && "${host}" == console-openshift-console.* ]]; then
-    local detected="${host#console-openshift-console.}"
-    if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "${detected}" \
-      && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
-      echo "Updating CLUSTER_ROUTER_BASE: ${CLUSTER_ROUTER_BASE} -> ${detected} (current cluster)"
+# Extract apps domain suffix from a route host like keycloak-myns.apps.cluster.example.com
+router_base_from_route_host() {
+  local host="$1"
+  local namespace="${2:-${WORKSHOP_NAMESPACE}}"
+  local suffix="-${namespace}."
+
+  [[ -n "${host}" && -n "${namespace}" ]] || return 1
+  [[ "${host}" == *"${suffix}"* ]] || return 1
+  echo "${host#*"${suffix}"}"
+}
+
+detect_router_base_from_namespace_routes() {
+  local namespace="${1:-${WORKSHOP_NAMESPACE}}"
+  local route_name host router_base
+
+  require_oc
+  [[ -n "${namespace}" ]] || return 1
+
+  for route_name in keycloak people-frontend people-backend redhat-developer-hub \
+    workshop-catalog-server argocd-server; do
+    host=$(get_route_host "${namespace}" "${route_name}" 2>/dev/null || true)
+    if router_base=$(router_base_from_route_host "${host}" "${namespace}"); then
+      echo "${router_base}"
+      return 0
     fi
-    export CLUSTER_ROUTER_BASE="${detected}"
+  done
+
+  host=$(oc get route -n "${namespace}" -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
+  if router_base=$(router_base_from_route_host "${host}" "${namespace}"); then
+    echo "${router_base}"
     return 0
   fi
-  if [[ -n "${CLUSTER_ROUTER_BASE:-}" && "${CLUSTER_ROUTER_BASE}" != "apps.example.com" ]]; then
+  return 1
+}
+
+persist_cluster_router_base() {
+  local detected="$1"
+  local env_file="${SCRIPTS_DIR}/workshop.env"
+  local current=""
+
+  [[ -n "${detected}" && -f "${env_file}" ]] || return 0
+  if grep -q '^export CLUSTER_ROUTER_BASE=' "${env_file}"; then
+    current=$(grep '^export CLUSTER_ROUTER_BASE=' "${env_file}" \
+      | sed -E 's/^export CLUSTER_ROUTER_BASE=//' \
+      | sed -E 's/^"//; s/"$//; s/^'\''//; s/'\''$//')
+    if [[ "${current}" == "${detected}" || "${current}" == "apps.example.com" ]]; then
+      return 0
+    fi
+    sed_inplace "s|^export CLUSTER_ROUTER_BASE=.*|export CLUSTER_ROUTER_BASE=\"${detected}\"|" "${env_file}"
+    echo "Persisted CLUSTER_ROUTER_BASE=${detected} in ${env_file}"
+  fi
+}
+
+detect_cluster_router_base() {
+  local host="" detected="" old_base="${CLUSTER_ROUTER_BASE:-}"
+
+  if command -v oc >/dev/null 2>&1; then
+    host=$(oc get route console -n openshift-console -o jsonpath='{.spec.host}' 2>/dev/null || true)
+    if [[ -z "${host}" ]]; then
+      host=$(oc get route -n openshift-console -o jsonpath='{.items[0].spec.host}' 2>/dev/null || true)
+    fi
+    if [[ -n "${host}" && "${host}" == console-openshift-console.* ]]; then
+      detected="${host#console-openshift-console.}"
+    fi
+
+    if [[ -z "${detected}" ]]; then
+      detected=$(detect_router_base_from_namespace_routes "${WORKSHOP_NAMESPACE}" 2>/dev/null || true)
+    fi
+  fi
+
+  if [[ -n "${detected}" ]]; then
+    if [[ -n "${old_base}" && "${old_base}" != "${detected}" && "${old_base}" != "apps.example.com" ]]; then
+      echo "Updating CLUSTER_ROUTER_BASE: ${old_base} -> ${detected} (current cluster)"
+    fi
+    export CLUSTER_ROUTER_BASE="${detected}"
+    persist_cluster_router_base "${detected}"
+    return 0
+  fi
+
+  if [[ -n "${old_base}" && "${old_base}" != "apps.example.com" ]]; then
     return 0
   fi
   echo "Set CLUSTER_ROUTER_BASE in scripts/workshop.env (e.g. apps.cluster-name.example.com)" >&2
@@ -248,6 +312,36 @@ resolve_rhdh_host() {
     || echo "redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
 }
 
+# Prefer an existing Developer Hub route host for Helm upgrades (sandbox-safe).
+# OpenShift sandboxes reject Route.spec.host when it does not match the assigned router domain.
+resolve_rhdh_helm_global_host() {
+  local host=""
+
+  host=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null || true)
+  if [[ -n "${host}" ]]; then
+    echo "${host}"
+    return 0
+  fi
+  host=$(get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null || true)
+  if [[ -n "${host}" ]]; then
+    echo "${host}"
+    return 0
+  fi
+  echo ""
+}
+
+resolve_argocd_route_host() {
+  if oc get route argocd-server -n "${GITOPS_NAMESPACE}" >/dev/null 2>&1; then
+    get_route_host "${GITOPS_NAMESPACE}" "argocd-server"
+    return 0
+  fi
+  if oc get route "${ARGOCD_INSTANCE_NAME}-server" -n "${GITOPS_NAMESPACE}" >/dev/null 2>&1; then
+    get_route_host "${GITOPS_NAMESPACE}" "${ARGOCD_INSTANCE_NAME}-server"
+    return 0
+  fi
+  echo ""
+}
+
 resolve_rhdh_deploy_name() {
   if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     echo "redhat-developer-hub"
@@ -309,6 +403,30 @@ clear_dynamic_plugins_install_lock() {
   echo "Cleared dynamic plugins install lock (if present)."
 }
 
+clear_aap_management_plugins_from_pvc() {
+  if ! oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  local job_pod="workshop-aap-mgmt-plugins-clear"
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=true >/dev/null 2>&1 || true
+  oc run "${job_pod}" -n "${RHDH_NAMESPACE}" --restart=Never \
+    --image=registry.redhat.io/ubi9/ubi-minimal \
+    --overrides='{"spec":{"containers":[{"name":"clear","image":"registry.redhat.io/ubi9/ubi-minimal","command":["sh","-c","rm -rfv /mnt/internal-plugin-aap-management-dynamic-* /mnt/internal-plugin-aap-management-backend-dynamic-*; echo cleared-aap-mgmt-plugins"],"volumeMounts":[{"name":"pvc","mountPath":"/mnt"}]}],"volumes":[{"name":"pvc","persistentVolumeClaim":{"claimName":"dynamic-plugins-root"}}]}}' \
+    -- sleep 30 >/dev/null
+
+  local i
+  for i in $(seq 1 30); do
+    if oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null | grep -q cleared-aap-mgmt-plugins; then
+      break
+    fi
+    sleep 2
+  done
+  oc logs "${job_pod}" -n "${RHDH_NAMESPACE}" 2>/dev/null || true
+  oc delete pod "${job_pod}" -n "${RHDH_NAMESPACE}" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+  echo "Cleared stale AAP Management plugin directories from dynamic-plugins-root PVC (if present)."
+}
+
 wait_for_developer_hub_pods_gone() {
   local i count
   for i in $(seq 1 60); do
@@ -337,6 +455,11 @@ safe_rollout_developer_hub() {
   if developer_hub_uses_plugins_pvc "${deploy_name}" \
     || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     clear_dynamic_plugins_install_lock
+    if [[ "${CLEAR_AAP_MANAGEMENT_PLUGINS_FROM_PVC:-false}" == "true" \
+      || "${CLEAR_AAP_MANAGEMENT_PLUGINS_FROM_PVC:-false}" == "1" \
+      || "${CLEAR_AAP_MANAGEMENT_PLUGINS_FROM_PVC:-false}" == "yes" ]]; then
+      clear_aap_management_plugins_from_pvc
+    fi
   fi
 
   echo "Scaling ${deploy_name} back to ${replicas} replica(s)..."

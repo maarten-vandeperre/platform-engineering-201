@@ -275,6 +275,9 @@ if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1
   prepare_developer_hub_rollout
   echo "Restarting Developer Hub to apply configuration..."
   rollout_timeout="$(rollout_timeout_for_config)"
+  if is_aap_management_enabled; then
+    export CLEAR_AAP_MANAGEMENT_PLUGINS_FROM_PVC=true
+  fi
   if developer_hub_uses_plugins_pvc redhat-developer-hub \
     || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     safe_rollout_developer_hub redhat-developer-hub "${rollout_timeout}"

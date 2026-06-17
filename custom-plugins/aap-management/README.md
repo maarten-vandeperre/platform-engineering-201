@@ -56,6 +56,18 @@ Or enable `AAP_MANAGEMENT_ENABLED=true` and run the full Developer Hub config sc
 
 The setup script uploads plugin archives to `aap-management-plugin-server` and restarts Developer Hub.
 
+### Troubleshooting `/aap-management` 404
+
+If the sidebar shows **AAP Templates** but the page is a 404, the frontend dynamic plugin bundle is missing from the `dynamic-plugins-root` PVC. This can happen after rebuilding the plugin (integrity hash change) while the PVC still holds a stale `dynamic-plugin-config.hash` — RHDH's `install-dynamic-plugins` init container installs the new bundle then deletes it during cleanup.
+
+Re-deploy with the setup script (it clears stale AAP Management plugin directories from the PVC before rollout):
+
+```bash
+AAP_MANAGEMENT_ENABLED=true ./scripts/setup-custom-aap-management-plugin.sh
+```
+
+Verify in init container logs: `Successfully installed` for `plugin-aap-management-dynamic.tgz` with **no** following `Removing previously installed dynamic plugin internal-plugin-aap-management-dynamic-*`.
+
 ## Develop
 
 ```bash

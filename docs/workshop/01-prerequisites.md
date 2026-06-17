@@ -140,6 +140,36 @@ export CLUSTER_ROUTER_BASE=apps.your-cluster.example.com
 
 `CLUSTER_ROUTER_BASE` is the shared suffix for OpenShift routes (the part after the first hostname label). Example: for route `people-frontend-myns.apps.rm1.example.com`, set `CLUSTER_ROUTER_BASE=apps.rm1.example.com`.
 
+On **Red Hat Developer Sandbox**, leave `CLUSTER_ROUTER_BASE` at the default (`apps.example.com`) or omit it — bootstrap auto-detects the correct domain from the OpenShift console route or from existing routes in your namespace (Keycloak, People Service, Developer Hub). If you switch clusters, clear any stale value or delete the old `CLUSTER_ROUTER_BASE` line so detection can run again.
+
+### Route permission errors during Helm install
+
+If bootstrap fails with:
+
+```text
+Route ... is invalid: spec.host: Invalid value: "...": you do not have permission to set the host field of the route
+```
+
+the usual cause is a **stale `CLUSTER_ROUTER_BASE`** in `scripts/workshop.env` from a previous cluster (for example `apps.rm2.thpm.p1.openshiftapps.com` while your sandbox uses `apps.ocp.*.sandbox*.opentlc.com`).
+
+**Fix:**
+
+1. Update or remove `CLUSTER_ROUTER_BASE` in `scripts/workshop.env` (use `apps.example.com` to force auto-detection).
+2. Re-run bootstrap or just the Helm step:
+
+   ```bash
+   source scripts/workshop.env
+   ./scripts/install-developer-hub-helm.sh
+   ```
+
+Workshop GitOps routes (Keycloak, People Service, catalog server) omit `spec.host` so OpenShift assigns hostnames automatically. The Developer Hub Helm chart sets `spec.host` from `CLUSTER_ROUTER_BASE`; install scripts now detect the live cluster domain and reuse an existing route host when upgrading.
+
+Verify your route hostname after install:
+
+```bash
+oc get route redhat-developer-hub -o jsonpath='{.spec.host}{"\n"}'
+```
+
 ## Next step
 
 [2. Configure the workshop](02-configuration.md)
