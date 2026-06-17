@@ -59,5 +59,8 @@ install_oc
 install_helm
 install_node
 
-echo "JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/java-21}"
+if command -v java >/dev/null 2>&1; then
+  export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+fi
+echo "JAVA_HOME=${JAVA_HOME:-not set}"
 java -version 2>&1 | head -1

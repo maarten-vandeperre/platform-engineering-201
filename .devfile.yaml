@@ -12,26 +12,28 @@ metadata:
 components:
   - name: dev
     container:
-      image: registry.redhat.io/ubi9/openjdk-21:latest
+      # UDI supports Dev Spaces persistUserHome (stow at /home/user). Do not mount
+      # volumes under /home/user — use /projects/* instead to avoid init-persistent-home conflicts.
+      image: quay.io/devfile/universal-developer-image:ubi9-latest
       mountSources: true
-      memoryLimit: 12Gi
-      memoryRequest: 4Gi
+      memoryLimit: 4Gi
+      memoryRequest: 1Gi
       cpuLimit: 4000m
-      cpuRequest: 1000m
+      cpuRequest: 500m
       env:
-        - name: JAVA_HOME
-          value: /usr/lib/jvm/java-21
+        - name: HOME
+          value: /home/user
         - name: MAVEN_OPTS
-          value: -Dmaven.repo.local=/home/default/.m2/repository
+          value: -Dmaven.repo.local=/projects/.m2/repository
         - name: NODE_OPTIONS
-          value: --max-old-space-size=4096
+          value: --max-old-space-size=2048
       volumeMounts:
         - name: m2
-          path: /home/default/.m2
+          path: /projects/.m2
         - name: npm-cache
-          path: /home/default/.npm
+          path: /projects/.npm-cache
         - name: yarn-cache
-          path: /home/default/.cache/yarn
+          path: /projects/.yarn-cache
       endpoints:
         - name: people-frontend
           exposure: public
@@ -64,29 +66,33 @@ commands:
         cd "${REPO}"
         chmod +x scripts/*.sh scripts/lib/*.sh devfile/install-tools.sh 2>/dev/null || true
 
-        if ! java -version 2>&1 | grep -qE 'version "21'; then
-          echo "WARNING: Java 21 not active (got: $(java -version 2>&1 | head -1))"
-          export JAVA_HOME="/usr/lib/jvm/java-21"
-          export PATH="/usr/lib/jvm/java-21/bin:/home/default/.local/bin:${PATH}"
-          if [[ -x /usr/lib/jvm/java-21/bin/java ]]; then
-            mkdir -p "${HOME}/.local/bin"
-            ln -sf /usr/lib/jvm/java-21/bin/java "${HOME}/.local/bin/java" 2>/dev/null || true
-          else
-            echo "ERROR: Expected ubi9/openjdk-21 image (JAVA_HOME=/usr/lib/jvm/java-21)."
-            echo "Stop the workspace and create a new one from branch 20260614-enable-ansible."
-            bash devfile/install-tools.sh || true
-            exit 1
+        if command -v java >/dev/null 2>&1; then
+          export JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v java)")")")"
+          export PATH="${JAVA_HOME}/bin:${HOME}/.local/bin:${PATH}"
+        fi
+
+        if ! java -version 2>&1 | grep -qE 'version "(21|25)'; then
+          echo "WARNING: Java 21+ not active (got: $(java -version 2>&1 | head -1))"
+          bash devfile/install-tools.sh || true
+        fi
+
+        node_version_ok() {
+          command -v node >/dev/null 2>&1 || return 1
+          node -e 'const [maj,min]=process.versions.node.split(".").map(Number); process.exit((maj===20&&min>=19)||(maj===22&&min>=12)||maj>=23?0:1)'
+        }
+
+        if ! command -v oc >/dev/null 2>&1 || ! node_version_ok; then
+          bash devfile/install-tools.sh
+          export PATH="${HOME}/.local/bin:${PATH}"
+          if [[ -s "${HOME}/.nvm/nvm.sh" ]]; then
+            # shellcheck source=/dev/null
+            source "${HOME}/.nvm/nvm.sh"
           fi
         fi
 
-        if ! command -v node >/dev/null 2>&1 || ! command -v oc >/dev/null 2>&1; then
-          bash devfile/install-tools.sh
-          export PATH="${HOME}/.local/bin:${PATH}"
-        fi
-
-        if ! node -e 'const [maj,min]=process.versions.node.split(".").map(Number); process.exit((maj===20&&min>=19)||(maj===22&&min>=12)||maj>=23?0:1)'; then
-          echo "ERROR: Node.js $(node --version) is too old for AAP Management plugin build."
-          echo "Required: ^20.19.0 || ^22.12.0 || >=23. Stop the workspace and recreate from this devfile.yaml."
+        if ! node_version_ok; then
+          echo "ERROR: Node.js $(node --version 2>/dev/null || echo missing) is too old for AAP Management plugin build."
+          echo "Required: ^20.19.0 || ^22.12.0 || >=23. Stop the workspace and recreate from this .devfile.yaml."
           exit 1
         fi
 
