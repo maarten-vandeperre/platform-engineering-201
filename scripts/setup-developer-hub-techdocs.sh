@@ -73,7 +73,7 @@ if developer_hub_uses_plugins_pvc redhat-developer-hub \
   safe_rollout_developer_hub redhat-developer-hub 900s
 else
   oc rollout restart deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}"
-  oc rollout status deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --timeout=600s
+  wait_for_developer_hub_rollout redhat-developer-hub 600s
 fi
 
 echo "TechDocs volumes configured on Developer Hub deployment."

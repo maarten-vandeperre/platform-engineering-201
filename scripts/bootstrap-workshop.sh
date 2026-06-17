@@ -52,7 +52,8 @@ install_developer_hub() {
       if argocd_enabled; then
         "${SCRIPT_DIR}/install-argocd-helm.sh"
       fi
-      "${SCRIPT_DIR}/install-developer-hub-helm.sh"
+      # bootstrap runs setup-developer-hub-config.sh after Keycloak/Argo CD prep; skip duplicate here.
+      SKIP_RHDH_WORKSHOP_CONFIG=true "${SCRIPT_DIR}/install-developer-hub-helm.sh"
       ;;
     skip-platform)
       if ! oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1 \
@@ -94,6 +95,10 @@ echo "== Platform readiness =="
 "${SCRIPT_DIR}/ensure-workshop-platform.sh"
 
 echo ""
+echo "== Route readiness =="
+wait_for_rhdh_route_ready 900
+
+echo ""
 echo "== Validation =="
 "${SCRIPT_DIR}/validate-workshop.sh"
 
@@ -103,14 +108,16 @@ if [[ "${RUN_E2E:-false}" == "true" ]]; then
   "${SCRIPT_DIR}/../e2e/run-e2e.sh"
 fi
 
+FRONTEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-frontend" 2>/dev/null || echo "")
 RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null \
   || get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null || echo "")
-FRONTEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-frontend" 2>/dev/null || echo "")
 
 [[ -n "${FRONTEND_HOST}" ]] && echo "People UI:      https://${FRONTEND_HOST}"
-[[ -n "${RHDH_HOST}" ]] && echo "Developer Hub:  https://${RHDH_HOST}"
-[[ -n "${RHDH_HOST}" ]] && echo "API catalog:    https://${RHDH_HOST}/catalog?filters%5Bkind%5D=api"
-[[ -n "${RHDH_HOST}" ]] && echo "Tech Radar:     https://${RHDH_HOST}/tech-radar"
+if [[ -n "${RHDH_HOST}" ]]; then
+  print_rhdh_route_url
+  echo "API catalog:    https://${RHDH_HOST}/catalog?filters%5Bkind%5D=api"
+  echo "Tech Radar:     https://${RHDH_HOST}/tech-radar"
+fi
 echo ""
 echo "Sign in to Developer Hub: ${RHDH_KEYCLOAK_USER} / (password in workshop.env)"
 echo "Repair later: ./scripts/ensure-workshop-platform.sh && ./scripts/repair-people-app.sh"

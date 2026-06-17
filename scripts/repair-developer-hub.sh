@@ -12,24 +12,9 @@ ensure_workshop_platform
 
 if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
-  for i in $(seq 1 60); do
-    ready=$(oc get pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" \
-      -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
-    if [[ "${ready}" == "True" ]]; then
-      echo "Developer Hub pod is ready."
-      break
-    fi
-    if (( i == 60 )); then
-      echo "Warning: timed out waiting for Developer Hub pod." >&2
-    fi
-    sleep 10
-  done
+  wait_for_developer_hub_rollout redhat-developer-hub
 fi
 
-RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null \
-  || get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null \
-  || echo "")
-if [[ -n "${RHDH_HOST}" ]]; then
-  echo "Developer Hub: https://${RHDH_HOST}"
-fi
+wait_for_rhdh_route_ready 900
+print_rhdh_route_url
 echo "Developer Hub platform repair complete."

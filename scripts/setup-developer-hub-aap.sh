@@ -252,18 +252,7 @@ fi
 
 echo "Restarting Developer Hub to install Ansible dynamic plugins..."
 oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
-for i in $(seq 1 90); do
-  ready="$(oc get pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" \
-    -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
-  if [[ "${ready}" == "True" ]]; then
-    echo "Developer Hub pod is ready."
-    break
-  fi
-  if (( i == 90 )); then
-    echo "Warning: timed out waiting for Developer Hub pod." >&2
-  fi
-  sleep 10
-done
+wait_for_developer_hub_rollout "${deploy_name}"
 
 echo "Ansible Automation Platform plugin setup complete."
 echo "Open https://$(resolve_rhdh_host)/ansible after signing in."

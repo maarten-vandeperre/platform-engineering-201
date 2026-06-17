@@ -283,27 +283,19 @@ if oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1
     safe_rollout_developer_hub redhat-developer-hub "${rollout_timeout}"
   else
     oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
-    for i in $(seq 1 60); do
-      ready=$(oc get pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" -o jsonpath='{.items[0].status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)
-      if [[ "${ready}" == "True" ]]; then
-        echo "Developer Hub pod is ready."
-        break
-      fi
-      if (( i == 60 )); then
-        echo "Warning: timed out waiting for Developer Hub pod; configuration was applied." >&2
-      fi
-      sleep 10
-    done
+    wait_for_developer_hub_rollout redhat-developer-hub "${rollout_timeout}"
   fi
 elif oc get deployment "${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   oc set env "deployment/${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" \
     RHDH_OIDC_CLIENT_SECRET="${RHDH_OIDC_CLIENT_SECRET}" --overwrite
   oc rollout restart "deployment/${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}"
-  oc rollout status "deployment/${RHDH_INSTANCE_NAME}" -n "${RHDH_NAMESPACE}" --timeout=600s
+  wait_for_developer_hub_rollout "${RHDH_INSTANCE_NAME}" "$(rollout_timeout_for_config)"
 fi
 
+wait_for_rhdh_route_ready 900
+
 echo ""
-echo "Developer Hub: https://${RHDH_HOST}"
+print_rhdh_route_url
 echo "Sign in with Keycloak user ${RHDH_KEYCLOAK_USER} / (password from workshop.env)"
 
 if [[ "${GITHUB_TOKEN:-changeme}" == "changeme" ]]; then

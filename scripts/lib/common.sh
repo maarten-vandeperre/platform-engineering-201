@@ -438,6 +438,223 @@ wait_for_developer_hub_pods_gone() {
   return 1
 }
 
+rollout_timeout_to_seconds() {
+  local spec="${1:-600s}"
+  local num="${spec%s}"
+
+  if [[ "${num}" =~ ^([0-9]+)$ ]]; then
+    echo "${BASH_REMATCH[1]}"
+    return 0
+  fi
+  if [[ "${spec}" =~ ^([0-9]+)m$ ]]; then
+    echo $(( BASH_REMATCH[1] * 60 ))
+    return 0
+  fi
+  if [[ "${spec}" =~ ^([0-9]+)h$ ]]; then
+    echo $(( BASH_REMATCH[1] * 3600 ))
+    return 0
+  fi
+  echo 600
+}
+
+resolve_deployment_label_selector() {
+  local deploy_name="$1"
+  local namespace="$2"
+
+  command -v jq >/dev/null 2>&1 || return 1
+  oc get deployment "${deploy_name}" -n "${namespace}" -o json 2>/dev/null \
+    | jq -r '.spec.selector.matchLabels | to_entries | map("\(.key)=\(.value)") | join(",")'
+}
+
+deployment_pod_fatal_reason() {
+  local namespace="$1"
+  local label_selector="$2"
+  local reason=""
+
+  reason="$(oc get pod -n "${namespace}" -l "${label_selector}" -o json 2>/dev/null \
+    | jq -r '[.items[] | .status.containerStatuses[]?, .status.initContainerStatuses[]?
+       | .state.waiting.reason // empty]
+       | map(select(. == "CrashLoopBackOff" or . == "ImagePullBackOff" or . == "ErrImagePull"
+         or . == "CreateContainerConfigError" or . == "InvalidImageName" or . == "RunContainerError"))
+       | .[0] // empty' 2>/dev/null || true)"
+  if [[ -n "${reason}" ]]; then
+    echo "${reason}"
+    return 0
+  fi
+
+  if oc get pod -n "${namespace}" -l "${label_selector}" -o jsonpath='{.items[?(@.status.phase=="Failed")].metadata.name}' 2>/dev/null \
+    | grep -q .; then
+    echo "Failed"
+    return 0
+  fi
+
+  return 1
+}
+
+deployment_rollout_progress_line() {
+  local deploy_name="$1"
+  local namespace="$2"
+  local label_selector="$3"
+  local spec_replicas ready_replicas pod_line init_active
+
+  spec_replicas="$(oc get deployment "${deploy_name}" -n "${namespace}" \
+    -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "?")"
+  ready_replicas="$(oc get deployment "${deploy_name}" -n "${namespace}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")"
+  ready_replicas="${ready_replicas:-0}"
+
+  pod_line="$(oc get pod -n "${namespace}" -l "${label_selector}" \
+    --sort-by=.metadata.creationTimestamp --no-headers 2>/dev/null | tail -1 || true)"
+  if [[ -z "${pod_line}" ]]; then
+    echo "Still waiting — scheduling pods (${ready_replicas}/${spec_replicas} ready)"
+    return 0
+  fi
+
+  init_active="$(oc get pod -n "${namespace}" -l "${label_selector}" \
+    -o json 2>/dev/null \
+    | jq -r '[.items[-1].status.initContainerStatuses[]? | select(.state.running == null and .state.terminated == null) | .name] | join(", ")' 2>/dev/null || true)"
+  if [[ -n "${init_active}" ]]; then
+    echo "Still waiting — ${pod_line} (init: ${init_active}; ${ready_replicas}/${spec_replicas} ready)"
+  else
+    echo "Still waiting — ${pod_line} (${ready_replicas}/${spec_replicas} ready)"
+  fi
+}
+
+deployment_still_progressing() {
+  local namespace="$1"
+  local label_selector="$2"
+  local pod_count running_or_init pending_scheduled
+
+  pod_count="$(oc get pod -n "${namespace}" -l "${label_selector}" --no-headers 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "${pod_count}" -gt 0 ]] || return 1
+
+  running_or_init="$(oc get pod -n "${namespace}" -l "${label_selector}" -o json 2>/dev/null \
+    | jq -r '[.items[] | select(.status.phase == "Running")
+       | (.status.initContainerStatuses // [])[] | select(.state.running or (.state.terminated | not))
+       | .name] | length' 2>/dev/null || echo "0")"
+  if [[ "${running_or_init}" -gt 0 ]]; then
+    return 0
+  fi
+
+  pending_scheduled="$(oc get pod -n "${namespace}" -l "${label_selector}" -o json 2>/dev/null \
+    | jq -r '[.items[] | select(.status.phase == "Pending" and (.spec.nodeName // "") != "")] | length' 2>/dev/null || echo "0")"
+  if [[ "${pending_scheduled}" -gt 0 ]]; then
+    return 0
+  fi
+
+  if oc get pod -n "${namespace}" -l "${label_selector}" -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null \
+    | grep -q .; then
+    return 0
+  fi
+
+  return 1
+}
+
+# Friendly rollout wait: progress updates instead of oc rollout status noise/timeouts.
+# Returns 0 when ready, or when still progressing after timeout (slow sandbox startup).
+# Returns 1 only for fatal pod errors or a stuck deployment with no progress.
+wait_for_deployment_rollout() {
+  local deploy_name="$1"
+  local namespace="$2"
+  local timeout_spec="${3:-600s}"
+  local hint="${4:-Startup can take several minutes on sandbox clusters.}"
+  local label_selector="${5:-}"
+
+  local timeout_secs interval=15 progress_interval=30
+  local start now elapsed last_progress fatal_reason
+
+  timeout_secs="$(rollout_timeout_to_seconds "${timeout_spec}")"
+  if [[ -z "${label_selector}" ]]; then
+    label_selector="$(resolve_deployment_label_selector "${deploy_name}" "${namespace}" 2>/dev/null || true)"
+  fi
+  [[ -n "${label_selector}" ]] || label_selector="app.kubernetes.io/name=developer-hub"
+
+  echo "Waiting for deployment/${deploy_name} in ${namespace} (up to $(( timeout_secs / 60 )) min)..."
+  echo "  ${hint}"
+
+  start=$(date +%s)
+  last_progress="${start}"
+  while true; do
+    now=$(date +%s)
+    elapsed=$(( now - start ))
+
+    if ! oc get deployment "${deploy_name}" -n "${namespace}" >/dev/null 2>&1; then
+      if (( elapsed >= timeout_secs )); then
+        echo "Deployment/${deploy_name} was not created within $(( timeout_secs / 60 )) minutes." >&2
+        return 1
+      fi
+      if (( now - last_progress >= progress_interval )); then
+        echo "  Still waiting — deployment/${deploy_name} not created yet..."
+        last_progress="${now}"
+      fi
+      sleep "${interval}"
+      continue
+    fi
+
+    local spec_replicas ready_replicas updated_replicas unavailable
+    spec_replicas="$(oc get deployment "${deploy_name}" -n "${namespace}" \
+      -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "0")"
+    ready_replicas="$(oc get deployment "${deploy_name}" -n "${namespace}" \
+      -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")"
+    ready_replicas="${ready_replicas:-0}"
+    updated_replicas="$(oc get deployment "${deploy_name}" -n "${namespace}" \
+      -o jsonpath='{.status.updatedReplicas}' 2>/dev/null || echo "0")"
+    updated_replicas="${updated_replicas:-0}"
+    unavailable="$(oc get deployment "${deploy_name}" -n "${namespace}" \
+      -o jsonpath='{.status.unavailableReplicas}' 2>/dev/null || echo "0")"
+    unavailable="${unavailable:-0}"
+
+    if [[ "${spec_replicas}" -gt 0 && "${ready_replicas}" -ge "${spec_replicas}" \
+      && "${updated_replicas}" -ge "${spec_replicas}" && "${unavailable}" == "0" ]]; then
+      echo "Deployment/${deploy_name} is ready (${ready_replicas}/${spec_replicas} replicas)."
+      return 0
+    fi
+
+    if fatal_reason="$(deployment_pod_fatal_reason "${namespace}" "${label_selector}")"; then
+      echo "Deployment/${deploy_name} has pods in ${fatal_reason} — this is a real failure." >&2
+      echo "  oc describe pod -n ${namespace} -l ${label_selector}" >&2
+      echo "  oc logs -n ${namespace} -l ${label_selector} -c install-dynamic-plugins --tail=80" >&2
+      return 1
+    fi
+
+    if (( elapsed >= timeout_secs )); then
+      if deployment_still_progressing "${namespace}" "${label_selector}"; then
+        echo "Note: deployment/${deploy_name} is still starting after $(( timeout_secs / 60 )) minutes but pods look healthy — continuing bootstrap."
+        echo "  Watch progress: oc get pod -n ${namespace} -l ${label_selector} -w"
+        return 0
+      fi
+      echo "Deployment/${deploy_name} did not become ready within $(( timeout_secs / 60 )) minutes." >&2
+      echo "  oc get pod -n ${namespace} -l ${label_selector}" >&2
+      return 1
+    fi
+
+    if (( now - last_progress >= progress_interval )); then
+      deployment_rollout_progress_line "${deploy_name}" "${namespace}" "${label_selector}"
+      last_progress="${now}"
+    fi
+
+    sleep "${interval}"
+  done
+}
+
+wait_for_developer_hub_rollout() {
+  local deploy_name="${1:-$(resolve_rhdh_deploy_name)}"
+  local timeout_spec="${2:-}"
+  local hint="Dynamic plugins and sidecars can take 10–15 minutes on sandbox clusters — this is normal."
+
+  # shellcheck disable=SC1091
+  source "${LIB_DIR}/developer-hub-dynamic-plugins.sh"
+  if [[ -z "${timeout_spec}" ]]; then
+    timeout_spec="$(rollout_timeout_for_config)"
+  fi
+  if is_aap_enabled; then
+    hint="Ansible dynamic plugins are downloading — first install can take 15–30 minutes on sandbox."
+  fi
+
+  wait_for_deployment_rollout "${deploy_name}" "${RHDH_NAMESPACE}" "${timeout_spec}" "${hint}" \
+    "app.kubernetes.io/name=developer-hub"
+}
+
 safe_rollout_developer_hub() {
   local deploy_name="${1:-$(resolve_rhdh_deploy_name)}"
   local timeout="${2:-900s}"
@@ -450,7 +667,9 @@ safe_rollout_developer_hub() {
 
   echo "Scaling ${deploy_name} to 0 to release dynamic-plugins PVC and avoid lock contention..."
   oc scale "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --replicas=0
-  wait_for_developer_hub_pods_gone || oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout=300s || true
+  wait_for_developer_hub_pods_gone || wait_for_deployment_rollout "${deploy_name}" "${RHDH_NAMESPACE}" 300s \
+    "Waiting for pods to terminate before clearing plugin locks." \
+    "app.kubernetes.io/name=developer-hub" || true
 
   if developer_hub_uses_plugins_pvc "${deploy_name}" \
     || oc get pvc dynamic-plugins-root -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
@@ -464,7 +683,7 @@ safe_rollout_developer_hub() {
 
   echo "Scaling ${deploy_name} back to ${replicas} replica(s)..."
   oc scale "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --replicas="${replicas}"
-  oc rollout status "deployment/${deploy_name}" -n "${RHDH_NAMESPACE}" --timeout="${timeout}"
+  wait_for_developer_hub_rollout "${deploy_name}" "${timeout}"
 }
 
 install_pyyaml_via_os_packages() {
@@ -770,6 +989,129 @@ wait_keycloak_http_ready() {
   return 1
 }
 
+route_response_is_application_unavailable() {
+  local body_file="$1"
+  local code="${2:-}"
+
+  if [[ "${code}" == "503" ]]; then
+    return 0
+  fi
+  [[ -f "${body_file}" ]] && grep -qi 'application is not available' "${body_file}"
+}
+
+route_http_is_ready() {
+  local code="$1"
+  local body_file="$2"
+
+  case "${code}" in
+    200 | 302 | 303)
+      route_response_is_application_unavailable "${body_file}" "${code}" && return 1
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+# Poll https://host/path until HTTP 200/302/303 (not OpenShift "Application is not available").
+wait_for_route_ready() {
+  local host="$1"
+  local label="${2:-route}"
+  local timeout="${3:-900}"
+  local path="${4:-/}"
+  local url attempt=0 code interval=10 progress_interval=60
+  local start now elapsed last_progress body_file
+
+  command -v curl >/dev/null 2>&1 || {
+    echo "curl is required for route health checks" >&2
+    return 1
+  }
+
+  [[ -n "${host}" ]] || {
+    echo "${label}: route host is empty" >&2
+    return 1
+  }
+
+  url="https://${host}${path}"
+  body_file="$(mktemp)"
+  trap 'rm -f "${body_file}"' RETURN
+
+  echo "Waiting for ${label} at ${url} (up to $(( timeout / 60 )) min)..."
+  start=$(date +%s)
+  last_progress="${start}"
+  while true; do
+    now=$(date +%s)
+    elapsed=$(( now - start ))
+    attempt=$(( attempt + 1 ))
+
+    code=$(curl -sk -o "${body_file}" -w "%{http_code}" "${url}" 2>/dev/null || echo "000")
+    if route_http_is_ready "${code}" "${body_file}"; then
+      echo "${label} is reachable (HTTP ${code})."
+      return 0
+    fi
+
+    if (( elapsed >= timeout )); then
+      echo "${label} is not reachable at ${url} after $(( timeout / 60 )) minutes (last HTTP ${code})." >&2
+      if route_response_is_application_unavailable "${body_file}" "${code}"; then
+        echo "OpenShift router returned 'Application is not available' — endpoints may be empty or pods not ready." >&2
+        echo "  oc get route,svc,endpoints -n ${RHDH_NAMESPACE:-${WORKSHOP_NAMESPACE}}" >&2
+        echo "  oc get pod -n ${RHDH_NAMESPACE:-${WORKSHOP_NAMESPACE}} -l app.kubernetes.io/name=developer-hub" >&2
+      fi
+      return 1
+    fi
+
+    if (( now - last_progress >= progress_interval )); then
+      if route_response_is_application_unavailable "${body_file}" "${code}"; then
+        echo "  Still waiting — HTTP ${code} (OpenShift: Application is not available; pods may still be starting)..."
+      else
+        echo "  Still waiting — HTTP ${code}..."
+      fi
+      last_progress="${now}"
+    fi
+    sleep "${interval}"
+  done
+}
+
+wait_for_rhdh_route_ready() {
+  local timeout="${1:-900}"
+  local host="" start
+
+  start=$(date +%s)
+  echo "Waiting for Developer Hub route in ${RHDH_NAMESPACE}..."
+  while true; do
+    host=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null \
+      || get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null || true)
+    if [[ -n "${host}" ]]; then
+      break
+    fi
+    if (( $(date +%s) - start > 120 )); then
+      echo "Developer Hub route not found. Check: oc get route -n ${RHDH_NAMESPACE}" >&2
+      return 1
+    fi
+    sleep 5
+  done
+
+  wait_for_route_ready "${host}" "Developer Hub" "${timeout}" "/"
+}
+
+print_rhdh_route_url() {
+  local host constructed
+
+  host=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/null \
+    || get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null || true)
+  if [[ -z "${host}" ]]; then
+    host="$(resolve_rhdh_host)"
+    echo "Developer Hub (expected): https://${host}"
+    echo "  Route not found yet — run: oc get route -n ${RHDH_NAMESPACE}"
+    return 1
+  fi
+
+  constructed="redhat-developer-hub-${WORKSHOP_NAMESPACE}.${CLUSTER_ROUTER_BASE}"
+  echo "Developer Hub:  https://${host}"
+  if [[ "${host}" != "${constructed}" ]]; then
+    echo "  (from oc get route — not ${constructed})"
+  fi
+}
+
 # Returns 0 when ready, 1 when a repair was applied, 2 when repair is needed (dry-run).
 ensure_deployment_running() {
   local deploy_name="${1}"
@@ -858,7 +1200,30 @@ ensure_developer_hub_running() {
     return 0
   fi
 
-  ensure_deployment_running "${deploy_name}" "${RHDH_NAMESPACE}" 1 600 "${dry_run}"
+  if [[ "${dry_run}" == "true" ]]; then
+    ensure_deployment_running "${deploy_name}" "${RHDH_NAMESPACE}" 1 600 "${dry_run}"
+    return $?
+  fi
+
+  local replicas ready
+  replicas=$(oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" -o jsonpath='{.spec.replicas}')
+  ready=$(oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" \
+    -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
+  ready="${ready:-0}"
+
+  if [[ "${replicas}" -ge 1 && "${ready}" -ge 1 ]]; then
+    echo "OK   deployment/${deploy_name} (${RHDH_NAMESPACE}) ready=${ready}/${replicas}"
+    return 0
+  fi
+
+  echo "Scaling deployment/${deploy_name} in ${RHDH_NAMESPACE} to 1 (was ready=${ready}/${replicas})..."
+  oc scale "deployment/${deploy_name}" --replicas=1 -n "${RHDH_NAMESPACE}"
+  if ! wait_for_developer_hub_rollout "${deploy_name}"; then
+    echo "WARN deployment/${deploy_name} (${RHDH_NAMESPACE}) is not fully ready yet" >&2
+    return 2
+  fi
+  echo "OK   deployment/${deploy_name} (${RHDH_NAMESPACE}) scaled and ready"
+  return 1
 }
 
 ensure_all_workshop_instances() {
@@ -929,7 +1294,7 @@ ensure_all_workshop_instances() {
       if [[ "${ready}" != "True" ]]; then
         echo "Restarting Developer Hub pod after dependency recovery..."
         oc delete pod -l app.kubernetes.io/name=developer-hub -n "${RHDH_NAMESPACE}" --wait=false
-        oc rollout status deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}" --timeout=600s 2>/dev/null || true
+        wait_for_developer_hub_rollout redhat-developer-hub 600s 2>/dev/null || true
       fi
     fi
   fi

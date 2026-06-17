@@ -172,17 +172,28 @@ if [[ -n "${KEYCLOAK_URL:-}" ]]; then
 
   if oc get route redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub")
+    echo "== Developer Hub route (from oc get route) =="
+    print_rhdh_route_url
+
+    echo "== Developer Hub homepage =="
+    wait_for_route_ready "${RHDH_HOST}" "Developer Hub" 120 "/"
+
     echo "== Developer Hub OIDC redirect to Keycloak =="
-    OIDC_START_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+    OIDC_START_CODE=$(curl -sk -o /tmp/workshop-rhdh-oidc.body -w "%{http_code}" \
       "https://${RHDH_HOST}/api/auth/oidc/start?env=production" || echo "000")
     echo "HTTP ${OIDC_START_CODE}"
     if [[ "${OIDC_START_CODE}" == "302" || "${OIDC_START_CODE}" == "303" ]]; then
       echo "Developer Hub OIDC redirect is working"
+    elif route_response_is_application_unavailable /tmp/workshop-rhdh-oidc.body "${OIDC_START_CODE}"; then
+      echo "Developer Hub route returns OpenShift 'Application is not available'." >&2
+      echo "Use the URL from: oc get route redhat-developer-hub -n ${RHDH_NAMESPACE}" >&2
+      exit 1
     elif [[ "${OIDC_START_CODE}" == "000" ]]; then
-      echo "Warning: could not reach Developer Hub route from this shell (curl HTTP 000)." >&2
-      echo "OIDC client and tokens validated above; sign in from a browser at https://${RHDH_HOST}" >&2
+      echo "Could not reach Developer Hub route from this shell (curl HTTP 000)." >&2
+      exit 1
     else
-      echo "Warning: unexpected HTTP ${OIDC_START_CODE} from OIDC start (expected 302 or 303)." >&2
+      echo "Unexpected HTTP ${OIDC_START_CODE} from OIDC start (expected 302 or 303)." >&2
+      exit 1
     fi
   fi
 fi

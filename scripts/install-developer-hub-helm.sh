@@ -19,9 +19,7 @@ ARGOCD_URL="${ARGOCD_URL:-https://${ARGOCD_HOST:-argocd-${WORKSHOP_NAMESPACE}.${
 ARGOCD_TOKEN="${ARGOCD_TOKEN:-changeme}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-changeme}"
 
-export CLUSTER_ROUTER_BASE RHDH_APP_TITLE WORKSHOP_GIT_REPO WORKSHOP_GIT_BRANCH \
-  KEYCLOAK_URL KEYCLOAK_REALM RHDH_KEYCLOAK_CLIENT_ID RHDH_OIDC_CLIENT_SECRET \
-  ARGOCD_URL ARGOCD_TOKEN GITHUB_TOKEN RHDH_HELM_GLOBAL_HOST
+export CLUSTER_ROUTER_BASE RHDH_HELM_GLOBAL_HOST
 
 RHDH_HELM_CHART="${RHDH_HELM_CHART:-https://github.com/openshift-helm-charts/charts/releases/download/redhat-redhat-developer-hub-1.9.3/redhat-developer-hub-1.9.3.tgz}"
 
@@ -40,17 +38,31 @@ oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
   --dry-run=client -o yaml | oc apply -f -
 
 VALUES_FILE="$(mktemp)"
-workshop_envsubst '${CLUSTER_ROUTER_BASE} ${RHDH_HELM_GLOBAL_HOST} ${RHDH_APP_TITLE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${GITHUB_TOKEN}' \
+workshop_envsubst '${CLUSTER_ROUTER_BASE} ${RHDH_HELM_GLOBAL_HOST}' \
   <"${MANIFESTS_DIR}/../helm/rhdh-values.yaml" >"${VALUES_FILE}"
 
 helm upgrade --install redhat-developer-hub "${RHDH_HELM_CHART}" \
   -n "${RHDH_NAMESPACE}" \
-  -f "${VALUES_FILE}" \
-  --wait --timeout 15m
+  -f "${VALUES_FILE}"
 
 rm -f "${VALUES_FILE}"
 
+echo ""
+echo "Waiting for Developer Hub Helm release to roll out..."
+wait_for_developer_hub_rollout redhat-developer-hub 900s
+
 "${SCRIPTS_DIR}/setup-developer-hub-dynamic-plugins-cache.sh" || true
 
-RHDH_HOST="$(resolve_rhdh_host)"
-echo "Developer Hub: https://${RHDH_HOST}"
+# Helm always re-renders redhat-developer-hub-app-config from chart defaults on upgrade.
+# Re-apply the full workshop app-config (catalog, auth, theme, plugins, etc.).
+if [[ "${SKIP_RHDH_WORKSHOP_CONFIG:-false}" != "true" ]]; then
+  echo ""
+  echo "Applying full workshop app-config after Helm upgrade..."
+  "${SCRIPTS_DIR}/setup-developer-hub-config.sh"
+else
+  echo ""
+  echo "NOTE: SKIP_RHDH_WORKSHOP_CONFIG=true — run ./scripts/setup-developer-hub-config.sh to apply workshop app-config."
+fi
+
+wait_for_rhdh_route_ready 900
+print_rhdh_route_url

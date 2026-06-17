@@ -1,5 +1,11 @@
-# Helm values snippet for Red Hat Developer Hub with Keycloak SSO
+# Helm values for Red Hat Developer Hub (routing / infrastructure only).
 # Use with: helm upgrade redhat-developer-hub <chart> -f manifests/helm/rhdh-values.yaml
+#
+# Do NOT put workshop app-config here (catalog, theme, kubernetes, MCP, AAP, etc.).
+# The chart renders redhat-developer-hub-app-config from upstream.backstage.appConfig;
+# any inline appConfig is overwritten on every helm upgrade and wipes the full workshop
+# config. Full app-config is applied by ./scripts/setup-developer-hub-config.sh
+# (called automatically at the end of install-developer-hub-helm.sh).
 #
 # Do not set extraVolumes here — the chart defines extensions-catalog and other
 # required volumes. Enable the plugins cache PVC after install:
@@ -9,34 +15,3 @@ global:
   clusterRouterBase: ${CLUSTER_ROUTER_BASE}
   # When set (existing route host), Helm keeps the assigned sandbox hostname instead of recomputing from clusterRouterBase.
   host: ${RHDH_HELM_GLOBAL_HOST}
-
-upstream:
-  backstage:
-    appConfig:
-      app:
-        title: ${RHDH_APP_TITLE}
-      auth:
-        environment: production
-        providers:
-          oidc:
-            production:
-              metadataUrl: ${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/.well-known/openid-configuration
-              clientId: ${RHDH_KEYCLOAK_CLIENT_ID}
-              clientSecret: ${RHDH_OIDC_CLIENT_SECRET}
-              prompt: auto
-              signIn:
-                resolvers:
-                  - resolver: preferredUsernameMatchingUserEntityName
-                    dangerouslyAllowSignInWithoutUserInCatalog: true
-      signInPage: oidc
-      catalog:
-        rules:
-          - allow:
-              - Component
-              - System
-              - API
-              - Resource
-              - Location
-              - Template
-              - User
-              - Group

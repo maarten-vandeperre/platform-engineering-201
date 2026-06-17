@@ -2,6 +2,8 @@ workshop.env KEYCLOAK_URL and OIDC_AUTH_SERVER_URL still have hardcoded CLUSTER_
 
 fork
 
+oc login
+
 changed:
     oc login
     CLUSTER_ROUTER_BASE
@@ -28,3 +30,4 @@ source ~/.nvm/nvm.sh
 
 python3 -m pip install --user pyyaml
 ./scripts/setup-developer-hub-config.sh
+
