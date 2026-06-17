@@ -232,15 +232,20 @@ resolve_deploy_name() {
 }
 
 export AAP_CHECK_SSL="${AAP_CHECK_SSL:-false}"
-detect_aap_controller_url
-ensure_aap_token || true
-ensure_registry_pull_secret || true
+
+if ! ensure_registry_pull_secret; then
+  echo "ERROR: Could not configure registry.redhat.io auth for Ansible OCI plugins." >&2
+  exit 1
+fi
 
 deploy_name="$(resolve_deploy_name)"
 if [[ -z "${deploy_name}" ]]; then
   echo "Developer Hub deployment not found; registry secret applied. Re-run after RHDH is installed."
   exit 0
 fi
+
+detect_aap_controller_url
+ensure_aap_token || true
 
 ensure_image_pull_secret_on_deployment "${deploy_name}"
 ensure_ansible_devtools_sidecar "${deploy_name}"

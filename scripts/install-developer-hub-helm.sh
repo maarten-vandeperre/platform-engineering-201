@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/developer-hub-dynamic-plugins.sh"
 
 require_oc
 command -v helm >/dev/null 2>&1 || { echo "helm CLI is required" >&2; exit 1; }
@@ -29,6 +31,12 @@ if [[ -n "${RHDH_HELM_GLOBAL_HOST}" ]]; then
 fi
 
 helm_unlock_release redhat-developer-hub "${RHDH_NAMESPACE}"
+
+if is_aap_enabled; then
+  require_aap_registry_credentials
+  echo "Pre-creating registry.redhat.io auth for Ansible OCI dynamic plugins..."
+  "${SCRIPT_DIR}/setup-developer-hub-aap.sh" --no-rollout
+fi
 
 oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
   --from-literal=ARGOCD_URL="${ARGOCD_URL}" \

@@ -520,6 +520,50 @@ deployment_rollout_progress_line() {
   fi
 }
 
+print_deployment_pod_failure_hints() {
+  local namespace="$1"
+  local label_selector="$2"
+  local fatal_reason="${3:-}"
+  local pod crash_container log_container
+
+  pod="$(oc get pod -n "${namespace}" -l "${label_selector}" \
+    --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null || true)"
+  [[ -n "${pod}" ]] || return 0
+
+  echo "  Pod: ${pod}" >&2
+  crash_container="$(oc get pod "${pod}" -n "${namespace}" -o json 2>/dev/null \
+    | jq -r '[.status.initContainerStatuses[]?, .status.containerStatuses[]?
+       | select(.state.waiting.reason == "CrashLoopBackOff" or .state.waiting.reason == "ImagePullBackOff"
+         or .state.waiting.reason == "ErrImagePull" or .state.waiting.reason == "CreateContainerConfigError")
+       | "\(.name) (\(.state.waiting.reason))"] | first // empty' 2>/dev/null || true)"
+  if [[ -n "${crash_container}" ]]; then
+    echo "  Failing container: ${crash_container}" >&2
+  fi
+
+  log_container="${crash_container%% *}"
+  if [[ -z "${log_container}" ]]; then
+    log_container="install-dynamic-plugins"
+  fi
+
+  echo "  --- ${log_container} logs (last 25 lines) ---" >&2
+  oc logs "${pod}" -n "${namespace}" -c "${log_container}" --tail=25 --previous 2>/dev/null \
+    || oc logs "${pod}" -n "${namespace}" -c "${log_container}" --tail=25 2>/dev/null \
+    || true
+
+  if [[ "${AAP_ENABLED:-false}" == "true" || "${AAP_ENABLED:-false}" == "1" || "${AAP_ENABLED:-false}" == "yes" ]]; then
+    if ! oc get secret redhat-developer-hub-dynamic-plugins-registry-auth -n "${namespace}" >/dev/null 2>&1; then
+      echo "  HINT: AAP_ENABLED=true but secret redhat-developer-hub-dynamic-plugins-registry-auth is missing." >&2
+      echo "        Set RH_REGISTRY_USERNAME/RH_REGISTRY_TOKEN and run ./scripts/setup-developer-hub-aap.sh" >&2
+    fi
+  fi
+
+  if [[ "${fatal_reason}" == "CrashLoopBackOff" ]] \
+    && oc logs "${pod}" -n "${namespace}" -c install-dynamic-plugins --tail=5 2>/dev/null \
+      | grep -qiE 'Please login to the Red Hat Registry|unauthorized|authentication required'; then
+    echo "  HINT: registry.redhat.io auth failed — configure RH registry credentials before re-running bootstrap." >&2
+  fi
+}
+
 deployment_still_progressing() {
   local namespace="$1"
   local label_selector="$2"
@@ -612,6 +656,7 @@ wait_for_deployment_rollout() {
 
     if fatal_reason="$(deployment_pod_fatal_reason "${namespace}" "${label_selector}")"; then
       echo "Deployment/${deploy_name} has pods in ${fatal_reason} — this is a real failure." >&2
+      print_deployment_pod_failure_hints "${namespace}" "${label_selector}" "${fatal_reason}"
       echo "  oc describe pod -n ${namespace} -l ${label_selector}" >&2
       echo "  oc logs -n ${namespace} -l ${label_selector} -c install-dynamic-plugins --tail=80" >&2
       return 1

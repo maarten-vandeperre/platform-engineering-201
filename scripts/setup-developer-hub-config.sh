@@ -214,31 +214,6 @@ render_app_config() {
   cat "${merged_file}"
 }
 
-require_aap_registry_credentials() {
-  if [[ -n "${RH_REGISTRY_PULL_SECRET:-}" ]]; then
-    return 0
-  fi
-  if [[ -n "${RH_REGISTRY_USERNAME:-}" && "${RH_REGISTRY_USERNAME}" != "changeme" \
-    && -n "${RH_REGISTRY_TOKEN:-}" && "${RH_REGISTRY_TOKEN}" != "changeme" ]]; then
-    return 0
-  fi
-  cat <<EOF >&2
-ERROR: AAP_ENABLED=true but Red Hat registry credentials are missing.
-
-Ansible OCI dynamic plugins are pulled from registry.redhat.io during install-dynamic-plugins.
-Create a service account at https://access.redhat.com/terms-based-registry/accounts and set:
-
-  export RH_REGISTRY_USERNAME=<service-account-name>
-  export RH_REGISTRY_TOKEN=<token>
-
-Or run:
-
-  ./scripts/configure-aap-workshop-env.sh --rh-registry-username <sa> --rh-registry-token <token>
-
-EOF
-  return 1
-}
-
 prepare_developer_hub_rollout() {
   if is_aap_enabled; then
     require_aap_registry_credentials
