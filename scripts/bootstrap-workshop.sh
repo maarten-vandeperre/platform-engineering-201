@@ -107,8 +107,6 @@ RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub" 2>/dev/nul
   || get_route_host "${RHDH_NAMESPACE}" "${RHDH_INSTANCE_NAME}" 2>/dev/null || echo "")
 FRONTEND_HOST=$(get_route_host "${WORKSHOP_NAMESPACE}" "people-frontend" 2>/dev/null || echo "")
 
-echo ""
-echo "Workshop bootstrap complete."
 [[ -n "${FRONTEND_HOST}" ]] && echo "People UI:      https://${FRONTEND_HOST}"
 [[ -n "${RHDH_HOST}" ]] && echo "Developer Hub:  https://${RHDH_HOST}"
 [[ -n "${RHDH_HOST}" ]] && echo "API catalog:    https://${RHDH_HOST}/catalog?filters%5Bkind%5D=api"
@@ -116,3 +114,10 @@ echo "Workshop bootstrap complete."
 echo ""
 echo "Sign in to Developer Hub: ${RHDH_KEYCLOAK_USER} / (password in workshop.env)"
 echo "Repair later: ./scripts/ensure-workshop-platform.sh && ./scripts/repair-people-app.sh"
+echo ""
+cat <<'EOF'
+  ╭──────────────────────────────────────────────────╮
+  │  Platform Engineering 201                        │
+  │  Workshop bootstrap complete — you're done!      │
+  ╰──────────────────────────────────────────────────╯
+EOF

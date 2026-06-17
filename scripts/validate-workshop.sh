@@ -173,8 +173,17 @@ if [[ -n "${KEYCLOAK_URL:-}" ]]; then
   if oc get route redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     RHDH_HOST=$(get_route_host "${RHDH_NAMESPACE}" "redhat-developer-hub")
     echo "== Developer Hub OIDC redirect to Keycloak =="
-    curl -sk -o /dev/null -w "HTTP %{http_code}\n" \
-      "https://${RHDH_HOST}/api/auth/oidc/start?env=production"
+    OIDC_START_CODE=$(curl -sk -o /dev/null -w "%{http_code}" \
+      "https://${RHDH_HOST}/api/auth/oidc/start?env=production" || echo "000")
+    echo "HTTP ${OIDC_START_CODE}"
+    if [[ "${OIDC_START_CODE}" == "302" || "${OIDC_START_CODE}" == "303" ]]; then
+      echo "Developer Hub OIDC redirect is working"
+    elif [[ "${OIDC_START_CODE}" == "000" ]]; then
+      echo "Warning: could not reach Developer Hub route from this shell (curl HTTP 000)." >&2
+      echo "OIDC client and tokens validated above; sign in from a browser at https://${RHDH_HOST}" >&2
+    else
+      echo "Warning: unexpected HTTP ${OIDC_START_CODE} from OIDC start (expected 302 or 303)." >&2
+    fi
   fi
 fi
 
