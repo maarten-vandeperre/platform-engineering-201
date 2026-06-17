@@ -6,6 +6,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/common.sh"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/aap.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/developer-hub-dynamic-plugins.sh"
 
 echo "Configuring Developer Hub Keycloak SSO in ${RHDH_NAMESPACE}..."
 
@@ -66,7 +68,7 @@ configure_kubernetes_env() {
     --overwrite
 }
 if [[ -z "${BACKEND_SECRET:-}" ]] && oc get secret redhat-developer-hub-auth -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-  BACKEND_SECRET=$(oc get secret redhat-developer-hub-auth -n "${RHDH_NAMESPACE}" -o jsonpath='{.data.backend-secret}' | base64 -d)
+  BACKEND_SECRET=$(oc get secret redhat-developer-hub-auth -n "${RHDH_NAMESPACE}" -o jsonpath='{.data.backend-secret}' | base64_decode)
 fi
 export BACKEND_SECRET="${BACKEND_SECRET:-workshop-backend-secret}"
 export PEOPLE_NOTIFICATION_TOKEN="${PEOPLE_NOTIFICATION_TOKEN:-${BACKEND_SECRET}}"
@@ -78,13 +80,13 @@ export ARGOCD_TOKEN="${ARGOCD_TOKEN:-changeme}"
 
 if [[ -z "${POSTGRESQL_ADMIN_PASSWORD:-}" ]] && oc get secret redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   POSTGRESQL_ADMIN_PASSWORD=$(oc get secret redhat-developer-hub-postgresql -n "${RHDH_NAMESPACE}" \
-    -o jsonpath='{.data.postgres-password}' | base64 -d)
+    -o jsonpath='{.data.postgres-password}' | base64_decode)
 fi
 export POSTGRESQL_ADMIN_PASSWORD="${POSTGRESQL_ADMIN_PASSWORD:-changeme}"
 
 if [[ -z "${K8S_CLUSTER_TOKEN:-}" ]] && oc get secret backstage-kubernetes-token -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
   K8S_CLUSTER_TOKEN=$(oc get secret backstage-kubernetes-token -n "${RHDH_NAMESPACE}" \
-    -o jsonpath='{.data.K8S_CLUSTER_TOKEN}' | base64 -d)
+    -o jsonpath='{.data.K8S_CLUSTER_TOKEN}' | base64_decode)
 fi
 export K8S_CLUSTER_TOKEN="${K8S_CLUSTER_TOKEN:-changeme}"
 
@@ -128,7 +130,7 @@ render_app_config() {
   merged_file="$(mktemp)"
   trap 'rm -f "${base_file}" "${theme_file}" "${merged_file}"' RETURN
 
-  envsubst \
+  workshop_envsubst \
     '${RHDH_APP_TITLE} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${AUTH_GITHUB_CLIENT_ID} ${AUTH_GITHUB_CLIENT_SECRET} ${CLUSTER_ROUTER_BASE} ${WORKSHOP_NAMESPACE} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${BACKEND_SECRET} ${PEOPLE_NOTIFICATION_TOKEN} ${POSTGRESQL_ADMIN_PASSWORD} ${K8S_CLUSTER_TOKEN}' \
     <"${MANIFESTS_DIR}/developer-hub/app-config-rhdh.yaml" \
     | sed "s|PLACEHOLDER-RHDH-ROUTE|${RHDH_HOST}|g" \
@@ -142,14 +144,14 @@ render_app_config() {
     local mcp_file merged_mcp lightspeed_file merged_ls
     mcp_file="$(mktemp)"
     merged_mcp="$(mktemp)"
-    envsubst '${MCP_TOKEN}' <"${MANIFESTS_DIR}/developer-hub/app-config-mcp.yaml" >"${mcp_file}"
+    workshop_envsubst '${MCP_TOKEN}' <"${MANIFESTS_DIR}/developer-hub/app-config-mcp.yaml" >"${mcp_file}"
     merge_mcp_into_app_config "${base_file}" "${mcp_file}" "${merged_mcp}"
     cp "${merged_mcp}" "${base_file}"
     rm -f "${mcp_file}" "${merged_mcp}"
 
     lightspeed_file="$(mktemp)"
     merged_ls="$(mktemp)"
-    envsubst '${MCP_TOKEN}' <"${MANIFESTS_DIR}/developer-hub/app-config-lightspeed-snippet.yaml" >"${lightspeed_file}"
+    workshop_envsubst '${MCP_TOKEN}' <"${MANIFESTS_DIR}/developer-hub/app-config-lightspeed-snippet.yaml" >"${lightspeed_file}"
     merge_mcp_into_app_config "${base_file}" "${lightspeed_file}" "${merged_ls}"
     cp "${merged_ls}" "${base_file}"
     rm -f "${lightspeed_file}" "${merged_ls}"
@@ -168,7 +170,7 @@ render_app_config() {
     fi
     export AAP_CONTROLLER_URL="${AAP_CONTROLLER_URL:-changeme}"
     export AAP_TOKEN="${AAP_TOKEN:-changeme}"
-    envsubst '${AAP_CONTROLLER_URL} ${AAP_TOKEN} ${AAP_CHECK_SSL}' \
+    workshop_envsubst '${AAP_CONTROLLER_URL} ${AAP_TOKEN} ${AAP_CHECK_SSL}' \
       <"${MANIFESTS_DIR}/developer-hub/app-config-aap-snippet.yaml" >"${aap_file}"
     merge_mcp_into_app_config "${base_file}" "${aap_file}" "${merged_aap}"
     cp "${merged_aap}" "${base_file}"
@@ -184,14 +186,14 @@ render_app_config() {
     export AAP_TOKEN="${AAP_TOKEN:-changeme}"
     export AAP_ADMIN_USERNAME="${AAP_ADMIN_USERNAME:-admin}"
     export AAP_ADMIN_PASSWORD="${AAP_ADMIN_PASSWORD:-changeme}"
-    envsubst '${AAP_CONTROLLER_URL} ${AAP_TOKEN} ${AAP_ADMIN_USERNAME} ${AAP_ADMIN_PASSWORD} ${AAP_CHECK_SSL}' \
+    workshop_envsubst '${AAP_CONTROLLER_URL} ${AAP_TOKEN} ${AAP_ADMIN_USERNAME} ${AAP_ADMIN_PASSWORD} ${AAP_CHECK_SSL}' \
       <"${MANIFESTS_DIR}/developer-hub/app-config-aap-management-snippet.yaml" >"${mgmt_file}"
     merge_mcp_into_app_config "${base_file}" "${mgmt_file}" "${merged_mgmt}"
     cp "${merged_mgmt}" "${base_file}"
     rm -f "${mgmt_file}" "${merged_mgmt}"
   fi
 
-  envsubst '${EGYPTIAN_FULL_LOGO} ${EGYPTIAN_ICON_LOGO}' \
+  workshop_envsubst '${EGYPTIAN_FULL_LOGO} ${EGYPTIAN_ICON_LOGO}' \
     <"${MANIFESTS_DIR}/developer-hub/egyptian-theme.yaml" \
     | sed 's/^/  /' >"${theme_file}"
 
@@ -210,76 +212,6 @@ render_app_config() {
   ' "${base_file}" >"${merged_file}"
 
   cat "${merged_file}"
-}
-
-is_lightspeed_enabled() {
-  [[ "${LIGHTSPEED_ENABLED:-false}" == "true" \
-    || "${LIGHTSPEED_ENABLED:-false}" == "1" \
-    || "${LIGHTSPEED_ENABLED:-false}" == "yes" ]]
-}
-
-is_aap_enabled() {
-  [[ "${AAP_ENABLED:-false}" == "true" \
-    || "${AAP_ENABLED:-false}" == "1" \
-    || "${AAP_ENABLED:-false}" == "yes" ]]
-}
-
-is_aap_management_enabled() {
-  [[ "${AAP_MANAGEMENT_ENABLED:-false}" == "true" \
-    || "${AAP_MANAGEMENT_ENABLED:-false}" == "1" \
-    || "${AAP_MANAGEMENT_ENABLED:-false}" == "yes" ]]
-}
-
-ensure_aap_management_plugin_build() {
-  local integrity_file="${SCRIPTS_DIR}/../custom-plugins/aap-management/.build/integrity.env"
-  if [[ ! -f "${integrity_file}" ]]; then
-    "${SCRIPTS_DIR}/build-custom-aap-management-plugin.sh"
-  fi
-  # shellcheck disable=SC1090
-  source "${integrity_file}"
-  export AAP_MGMT_BACKEND_INTEGRITY AAP_MGMT_FRONTEND_INTEGRITY
-}
-
-render_dynamic_plugins() {
-  local base_file merged_file
-  base_file="$(mktemp)"
-  merged_file="$(mktemp)"
-  envsubst '${RHDH_NAMESPACE}' <"${MANIFESTS_DIR}/developer-hub/dynamic-plugins-rhdh.yaml" \
-    | awk '/dynamic-plugins.yaml: \|/{flag=1;next} flag{sub(/^    /,""); print}' >"${base_file}"
-
-  cp "${base_file}" "${merged_file}"
-  if is_lightspeed_enabled; then
-    printf '\n' >>"${merged_file}"
-    cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-lightspeed.yaml" >>"${merged_file}"
-    printf '\n' >>"${merged_file}"
-    cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-mcp.yaml" >>"${merged_file}"
-  fi
-  if is_aap_enabled; then
-    printf '\n' >>"${merged_file}"
-    cat "${MANIFESTS_DIR}/developer-hub/dynamic-plugins-aap.yaml" >>"${merged_file}"
-  fi
-  if is_aap_management_enabled; then
-    ensure_aap_management_plugin_build
-    printf '\n' >>"${merged_file}"
-    envsubst '${WORKSHOP_NAMESPACE} ${AAP_MGMT_BACKEND_INTEGRITY} ${AAP_MGMT_FRONTEND_INTEGRITY}' \
-      <"${MANIFESTS_DIR}/developer-hub/dynamic-plugins-aap-management.yaml" >>"${merged_file}"
-  fi
-
-  cat "${merged_file}"
-  rm -f "${base_file}" "${merged_file}"
-}
-
-apply_dynamic_plugins_config() {
-  local plugins_yaml
-  plugins_yaml=$(render_dynamic_plugins)
-  local target_cm="dynamic-plugins-rhdh"
-  if oc get configmap redhat-developer-hub-dynamic-plugins -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-    target_cm="redhat-developer-hub-dynamic-plugins"
-  fi
-  oc create configmap "${target_cm}" -n "${RHDH_NAMESPACE}" \
-    --from-literal=dynamic-plugins.yaml="${plugins_yaml}" \
-    --dry-run=client -o yaml | oc apply -f -
-  echo "Applied dynamic plugins to ConfigMap ${target_cm}"
 }
 
 require_aap_registry_credentials() {
@@ -305,16 +237,6 @@ Or run:
 
 EOF
   return 1
-}
-
-rollout_timeout_for_config() {
-  if is_aap_enabled; then
-    echo "1800s"
-  elif is_lightspeed_enabled; then
-    echo "900s"
-  else
-    echo "600s"
-  fi
 }
 
 prepare_developer_hub_rollout() {

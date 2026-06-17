@@ -21,9 +21,13 @@ import { Alert } from '@material-ui/lab';
 import { LaunchTemplateDialog } from './LaunchTemplateDialog';
 import { useDebouncedValue } from '../hooks';
 import { useAapManagementApi } from '../plugin';
-import { AapJobTemplate, AapPagedResponse } from '../types';
+import { AapJobRef, AapJobTemplate, AapPagedResponse } from '../types';
 
 const PAGE_SIZE = 10;
+
+type TemplatesTabProps = {
+  onLaunched: (job: AapJobRef) => void;
+};
 
 function templateTypeLabel(templateType: AapJobTemplate['templateType']) {
   return templateType === 'workflow_job_template' ? 'Workflow' : 'Job';
@@ -43,7 +47,7 @@ function labelChips(template: AapJobTemplate) {
   );
 }
 
-export function TemplatesTab() {
+export function TemplatesTab({ onLaunched }: TemplatesTabProps) {
   const api = useAapManagementApi();
   const [page, setPage] = React.useState(0);
   const [search, setSearch] = React.useState('');
@@ -205,7 +209,10 @@ export function TemplatesTab() {
         template={launchTarget}
         open={Boolean(launchTarget)}
         onClose={() => setLaunchTarget(null)}
-        onLaunched={load}
+        onLaunched={job => {
+          load();
+          onLaunched(job);
+        }}
       />
     </>
   );

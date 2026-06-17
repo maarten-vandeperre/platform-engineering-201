@@ -61,5 +61,7 @@ E2E_HEADLESS=false ./e2e/run-e2e.sh
 9. Developer Hub API catalog lists **People REST API**.
 10. Developer Hub **CI** tab on the People REST API entity loads GitHub Actions content.
 11. Developer Hub Tech Radar page loads workshop technologies.
-12. Developer Hub scaffolder exposes `publish:github` and lists the Quarkus template.
-13. Developer Hub **Developer Lightspeed** (when `LIGHTSPEED_ENABLED=true`): sidecars, plugin, and `/lightspeed` page.
+12. Developer Hub TechDocs pages render for Quarkus guide and ADR catalog entities.
+13. Developer Hub AAP Management plugin lists templates and shows job run logs/progress.
+14. Developer Hub scaffolder exposes `publish:github` and lists the Quarkus template.
+15. Developer Hub **Developer Lightspeed** (when `LIGHTSPEED_ENABLED=true`): sidecars, plugin, and `/lightspeed` page.

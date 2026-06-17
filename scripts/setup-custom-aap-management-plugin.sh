@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/developer-hub-dynamic-plugins.sh"
 
 usage() {
   cat <<EOF
@@ -82,8 +84,14 @@ if [[ "${NO_ROLLOUT}" == "true" ]]; then
   exit 0
 fi
 
-echo "Applying Developer Hub config for AAP Management plugin..."
-AAP_MANAGEMENT_ENABLED=true "${SCRIPTS_DIR}/setup-developer-hub-config.sh" 2>&1 | tail -5
+echo "Applying Developer Hub dynamic plugins config for AAP Management..."
+AAP_MANAGEMENT_ENABLED=true apply_dynamic_plugins_config
+
+deploy_name="$(resolve_rhdh_deploy_name)"
+if [[ "${NO_ROLLOUT}" != "true" ]] && oc get deployment "${deploy_name}" -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
+  echo "Rolling out Developer Hub to load updated AAP Management plugins..."
+  safe_rollout_developer_hub "${deploy_name}" "$(rollout_timeout_for_config)"
+fi
 
 RHDH_HOST="$(get_route_host "${RHDH_NAMESPACE}" redhat-developer-hub 2>/dev/null || true)"
 echo "Custom AAP Management plugin setup complete."

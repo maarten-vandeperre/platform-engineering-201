@@ -3,9 +3,21 @@ import { Box, Chip } from '@material-ui/core';
 import { Content, Header, Page } from '@backstage/core-components';
 import { TemplatesTab } from './TemplatesTab';
 import { JobHistoryTab } from './JobHistoryTab';
+import { JobDetailPanel } from './JobDetailPanel';
+import { AapJobRef } from '../types';
 
 export function AapManagementPage() {
   const [tab, setTab] = React.useState(0);
+  const [selectedJob, setSelectedJob] = React.useState<AapJobRef | null>(null);
+
+  const openJob = React.useCallback((job: AapJobRef) => {
+    setSelectedJob(job);
+  }, []);
+
+  const handleLaunched = React.useCallback((job: AapJobRef) => {
+    setTab(1);
+    setSelectedJob(job);
+  }, []);
 
   return (
     <Page themeId="tool">
@@ -29,11 +41,16 @@ export function AapManagementPage() {
           />
         </Box>
         <Box hidden={tab !== 0}>
-          <TemplatesTab />
+          <TemplatesTab onLaunched={handleLaunched} />
         </Box>
         <Box hidden={tab !== 1}>
-          <JobHistoryTab />
+          <JobHistoryTab onSelectJob={openJob} />
         </Box>
+        <JobDetailPanel
+          jobRef={selectedJob}
+          open={Boolean(selectedJob)}
+          onClose={() => setSelectedJob(null)}
+        />
       </Content>
     </Page>
   );

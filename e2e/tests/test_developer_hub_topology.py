@@ -75,7 +75,24 @@ def _assert_kubernetes_view(page_text):
     assert "select a sign-in method" not in lowered
     assert "openshift" in lowered
     assert "pod" in lowered
-    assert "no pods with errors" in lowered or "people-postgres" in lowered
+    assert "your clusters" in lowered or "pods" in lowered
+
+    workshop_workloads = ("people-postgres", "people-backend", "people-frontend")
+    error_markers = (
+        "back-off",
+        "failed to start",
+        "does not have minimum availability",
+        "crashloop",
+        "restarting failed",
+    )
+    for workload in workshop_workloads:
+        if workload not in lowered:
+            continue
+        for marker in error_markers:
+            if marker in lowered:
+                pytest.fail(
+                    f"{workload} is unhealthy in Developer Hub Kubernetes view"
+                )
 
 
 @pytest.mark.e2e

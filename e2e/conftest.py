@@ -76,6 +76,8 @@ def workshop_config():
         "timeout": int(_env("E2E_TIMEOUT_SECONDS", "180")),
         "lightspeed_enabled": _env("LIGHTSPEED_ENABLED", "false").lower()
         in {"1", "true", "yes"},
+        "aap_management_enabled": _env("AAP_MANAGEMENT_ENABLED", "false").lower()
+        in {"1", "true", "yes"},
     }
 
 

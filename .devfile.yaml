@@ -1,0 +1,193 @@
+schemaVersion: 2.2.0
+metadata:
+  name: platform-engineering-201
+  displayName: Platform Engineering 201 Workshop
+  description: >
+    Workshop workspace with Java 25 (ubi9/openjdk-25), Maven, Node.js/npm/yarn,
+    and OpenShift tooling to run scripts/bootstrap-workshop.sh in Dev Spaces.
+    Recreate the workspace after changing this file (Stop workspace → Start).
+  tags:
+    - java-25
+    - nodejs
+    - openshift
+    - developer-hub
+  language: java
+
+components:
+  # Primary: build custom image from devfile/Dockerfile (Java 25 + all CLI tools).
+  - name: dev
+    image:
+      imageName: platform-engineering-201-workspace:latest
+      dockerfile:
+        uri: Dockerfile
+        buildContext: devfile
+    container:
+      mountSources: true
+      memoryLimit: 12Gi
+      memoryRequest: 4Gi
+      cpuLimit: 4000m
+      cpuRequest: 1000m
+      env:
+        - name: HOME
+          value: /home/jboss
+        - name: JAVA_HOME
+          value: /usr/lib/jvm/java-25
+        - name: PATH
+          value: /usr/local/bin:/usr/lib/jvm/java-25/bin:/usr/bin:/bin
+        - name: MAVEN_OPTS
+          value: -Dmaven.repo.local=/home/jboss/.m2/repository
+        - name: NODE_OPTIONS
+          value: --max-old-space-size=4096
+      volumeMounts:
+        - name: m2
+          path: /home/jboss/.m2
+        - name: npm-cache
+          path: /home/jboss/.npm
+        - name: yarn-cache
+          path: /home/jboss/.cache/yarn
+      endpoints:
+        - name: people-frontend
+          exposure: public
+          protocol: http
+          targetPort: 5173
+          attributes:
+            discoverable: true
+        - name: people-backend
+          exposure: public
+          protocol: http
+          targetPort: 8080
+          attributes:
+            discoverable: true
+
+  - name: m2
+    volume:
+      size: 5Gi
+
+  - name: npm-cache
+    volume:
+      size: 2Gi
+
+  - name: yarn-cache
+    volume:
+      size: 2Gi
+
+commands:
+  - id: workspace-setup
+    label: 1. Workspace setup
+    exec:
+      component: dev
+      commandLine: |
+        set -euo pipefail
+        REPO="${DEVWORKSPACE_PROJECT_SOURCE:-${DEVWORKSPACE_NAME:-/projects/platform-engineering-201}}"
+        cd "${REPO}"
+        chmod +x scripts/*.sh scripts/lib/*.sh devfile/install-tools.sh 2>/dev/null || true
+
+        if ! java -version 2>&1 | grep -q 'version "25"'; then
+          echo "WARNING: Java 25 not active (got: $(java -version 2>&1 | head -1))"
+          echo "Installing user-level tools and ensuring JAVA_HOME..."
+          export JAVA_HOME="/usr/lib/jvm/java-25"
+          export PATH="/usr/lib/jvm/java-25/bin:/usr/local/bin:${PATH}"
+          if [[ -x /usr/lib/jvm/java-25/bin/java ]]; then
+            ln -sf /usr/lib/jvm/java-25/bin/java "${HOME}/.local/bin/java" 2>/dev/null || true
+          else
+            echo "ERROR: This workspace is not using ubi9/openjdk-25."
+            echo "Stop the workspace and create a new one from this repository's devfile.yaml"
+            echo "(do not use the generic Java 17 sample)."
+            bash devfile/install-tools.sh || true
+            exit 1
+          fi
+        fi
+
+        if ! command -v node >/dev/null 2>&1 || ! command -v oc >/dev/null 2>&1; then
+          bash devfile/install-tools.sh
+        fi
+
+        if [[ ! -f scripts/workshop.env ]]; then
+          cp scripts/workshop.env.example scripts/workshop.env
+          echo "Created scripts/workshop.env — edit before bootstrap."
+        fi
+
+        echo "=== Tool versions ==="
+        java -version 2>&1 | head -1
+        mvn -version 2>&1 | head -1
+        node --version
+        npm --version
+        yarn --version 2>/dev/null || echo "yarn: install via install-tools"
+        oc version --client 2>/dev/null || echo "oc: not installed"
+        helm version --short 2>/dev/null || echo "helm: not installed"
+
+  - id: oc-login
+    label: 2. oc login
+    exec:
+      component: dev
+      commandLine: |
+        set -euo pipefail
+        if [[ -n "${KUBERNETES_SERVICE_HOST:-}" ]] && [[ -f /var/run/secrets/kubernetes.io/serviceaccount/token ]]; then
+          oc login "https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT:-443}" \
+            --token="$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)" \
+            --certificate-authority=/var/run/secrets/kubernetes.io/serviceaccount/ca.crt \
+            && oc whoami && exit 0
+        fi
+        oc login
+
+  - id: bootstrap-workshop
+    label: 3. Bootstrap workshop
+    exec:
+      component: dev
+      commandLine: |
+        set -euo pipefail
+        cd "${DEVWORKSPACE_PROJECT_SOURCE}"
+        source scripts/workshop.env
+        ./scripts/bootstrap-workshop.sh
+
+  - id: setup-developer-hub-config
+    label: Setup Developer Hub config
+    exec:
+      component: dev
+      commandLine: |
+        set -euo pipefail
+        cd "${DEVWORKSPACE_PROJECT_SOURCE}"
+        source scripts/workshop.env
+        ./scripts/setup-developer-hub-config.sh
+
+  - id: validate-workshop
+    label: Validate workshop
+    exec:
+      component: dev
+      commandLine: |
+        set -euo pipefail
+        cd "${DEVWORKSPACE_PROJECT_SOURCE}"
+        source scripts/workshop.env
+        ./scripts/validate-workshop.sh
+
+  - id: build-people-backend
+    label: Build People Service backend (Maven)
+    exec:
+      component: dev
+      commandLine: mvn -B -f apps/people-service/backend/pom.xml clean package -DskipTests
+
+  - id: build-people-frontend
+    label: Build People Service frontend (npm)
+    exec:
+      component: dev
+      commandLine: |
+        set -euo pipefail
+        cd apps/people-service/frontend && npm ci && npm run build
+
+  - id: build-aap-management-plugin
+    label: Build AAP Management plugin (yarn)
+    exec:
+      component: dev
+      commandLine: ./scripts/build-custom-aap-management-plugin.sh
+
+  - id: dev-people-frontend
+    label: Dev — People frontend (Vite)
+    exec:
+      component: dev
+      commandLine: |
+        set -euo pipefail
+        cd apps/people-service/frontend && npm ci && npm run dev -- --host 0.0.0.0 --port 5173
+
+events:
+  postStart:
+    - workspace-setup

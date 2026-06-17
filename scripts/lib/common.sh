@@ -101,6 +101,49 @@ require_oc() {
   }
 }
 
+# GNU sed uses -i; BSD sed (macOS) requires -i ''.
+sed_inplace() {
+  if sed --version >/dev/null 2>&1; then
+    sed -i "$@"
+  else
+    sed -i '' "$@"
+  fi
+}
+
+# GNU base64 uses -d; macOS/BSD base64 uses -D.
+base64_decode() {
+  if printf 'dGVzdA==' | base64 -d >/dev/null 2>&1; then
+    base64 -d
+  else
+    base64 -D
+  fi
+}
+
+# Substitute ${VAR} placeholders from stdin. Uses gettext envsubst when installed;
+# otherwise a pure-bash fallback (RHDAT / minimal sandboxes often lack gettext).
+workshop_envsubst() {
+  local var_spec="$1"
+  if command -v envsubst >/dev/null 2>&1; then
+    envsubst "${var_spec}"
+    return 0
+  fi
+
+  local content token name value
+  content=$(cat)
+  for token in ${var_spec}; do
+    name="${token#\$\{}"
+    name="${name%\}}"
+    if [[ "${name}" == "${token}" ]]; then
+      name="${token#\$}"
+    fi
+    [[ -z "${name}" ]] && continue
+    value="${!name-}"
+    content="${content//\$\{${name}\}/${value}}"
+    content="${content//\$${name}/${value}}"
+  done
+  printf '%s' "${content}"
+}
+
 ensure_project() {
   require_oc
   if ! oc get namespace "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
@@ -112,9 +155,25 @@ ensure_project() {
 
 render_manifest() {
   local input="$1"
-  envsubst \
-    '${WORKSHOP_NAMESPACE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${WORKSHOP_GITHUB_ORG} ${WORKSHOP_GITHUB_REPO} ${WORKSHOP_BACKEND_IMAGE} ${WORKSHOP_FRONTEND_IMAGE} ${WORKSHOP_IMAGE_REGISTRY} ${RHDH_NAMESPACE} ${RHDH_INSTANCE_NAME} ${RHDH_APP_TITLE} ${GITOPS_NAMESPACE} ${ARGOCD_INSTANCE_NAME} ${ARGOCD_APP_NAME} ${PEOPLE_DB_NAME} ${PEOPLE_DB_USER} ${PEOPLE_DB_PASSWORD} ${PEOPLE_KEYCLOAK_USER} ${PEOPLE_KEYCLOAK_PASSWORD} ${PEOPLE_NOTIFICATION_TOKEN} ${KEYCLOAK_ADMIN_USER} ${KEYCLOAK_ADMIN_PASSWORD} ${KEYCLOAK_REALM} ${KEYCLOAK_CLIENT_ID} ${KEYCLOAK_URL} ${KEYCLOAK_HOST} ${OIDC_AUTH_SERVER_URL} ${OIDC_ENABLED} ${CLUSTER_ROUTER_BASE} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_KEYCLOAK_CLIENT_SECRET} ${RHDH_KEYCLOAK_USER} ${RHDH_KEYCLOAK_PASSWORD} ${RHDH_OIDC_CLIENT_SECRET} ${WORKSHOP_CATALOG_URL} ${BACKEND_SECRET} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${K8S_SA_TOKEN} ${K8S_CA_DATA} ${ORCHESTRATOR_DATA_INDEX_IMAGE} ${KEYCLOAK_SERVICE_USER} ${KEYCLOAK_SERVICE_PASSWORD} ${LIGHTSPEED_ENABLE_OPENAI} ${OPENAI_API_KEY} ${OPENAI_MODEL} ${LIGHTSPEED_VLLM_MAX_TOKENS} ${MCP_TOKEN} ${RHDH_HOST}' \
-    <"${input}"
+  local rendered
+
+  if [[ ! -f "${input}" ]]; then
+    echo "Manifest not found: ${input}" >&2
+    return 1
+  fi
+
+  rendered="$(
+    workshop_envsubst \
+      '${WORKSHOP_NAMESPACE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${WORKSHOP_GITHUB_ORG} ${WORKSHOP_GITHUB_REPO} ${WORKSHOP_BACKEND_IMAGE} ${WORKSHOP_FRONTEND_IMAGE} ${WORKSHOP_IMAGE_REGISTRY} ${RHDH_NAMESPACE} ${RHDH_INSTANCE_NAME} ${RHDH_APP_TITLE} ${GITOPS_NAMESPACE} ${ARGOCD_INSTANCE_NAME} ${ARGOCD_APP_NAME} ${PEOPLE_DB_NAME} ${PEOPLE_DB_USER} ${PEOPLE_DB_PASSWORD} ${PEOPLE_KEYCLOAK_USER} ${PEOPLE_KEYCLOAK_PASSWORD} ${PEOPLE_NOTIFICATION_TOKEN} ${KEYCLOAK_ADMIN_USER} ${KEYCLOAK_ADMIN_PASSWORD} ${KEYCLOAK_REALM} ${KEYCLOAK_CLIENT_ID} ${KEYCLOAK_URL} ${KEYCLOAK_HOST} ${OIDC_AUTH_SERVER_URL} ${OIDC_ENABLED} ${CLUSTER_ROUTER_BASE} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_KEYCLOAK_CLIENT_SECRET} ${RHDH_KEYCLOAK_USER} ${RHDH_KEYCLOAK_PASSWORD} ${RHDH_OIDC_CLIENT_SECRET} ${WORKSHOP_CATALOG_URL} ${BACKEND_SECRET} ${GITHUB_TOKEN} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${K8S_SA_TOKEN} ${K8S_CA_DATA} ${ORCHESTRATOR_DATA_INDEX_IMAGE} ${KEYCLOAK_SERVICE_USER} ${KEYCLOAK_SERVICE_PASSWORD} ${LIGHTSPEED_ENABLE_OPENAI} ${OPENAI_API_KEY} ${OPENAI_MODEL} ${LIGHTSPEED_VLLM_MAX_TOKENS} ${MCP_TOKEN} ${RHDH_HOST}' \
+      <"${input}"
+  )" || return 1
+
+  if [[ -z "${rendered//[[:space:]]/}" ]]; then
+    echo "render_manifest produced empty output for ${input} (check scripts/workshop.env exports)" >&2
+    return 1
+  fi
+
+  printf '%s' "${rendered}"
 }
 
 apply_rendered_dir() {
@@ -290,7 +349,7 @@ load_mcp_token_from_cluster() {
 
   if oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
     token="$(oc get secret lightspeed-mcp-token -n "${RHDH_NAMESPACE}" \
-      -o jsonpath='{.data.token}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+      -o jsonpath='{.data.token}' 2>/dev/null | base64_decode 2>/dev/null || true)"
     token="${token#Bearer }"
     if [[ -n "${token}" && "${token}" != "changeme" ]]; then
       echo "${token}"
@@ -694,7 +753,7 @@ verify_cluster_github_token() {
   fi
 
   secret_token="$(oc get secret rhdh-workshop-secrets -n "${namespace}" \
-    -o jsonpath='{.data.GITHUB_TOKEN}' | base64 -d)"
+    -o jsonpath='{.data.GITHUB_TOKEN}' | base64_decode)"
   if [[ -z "${secret_token}" || "${secret_token}" == "changeme" ]]; then
     echo "Cluster secret rhdh-workshop-secrets still has GITHUB_TOKEN=changeme." >&2
     return 1

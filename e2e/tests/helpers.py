@@ -179,6 +179,32 @@ def assert_openapi_response(body):
     assert "people" in lowered
 
 
+def wait_for_page_text(driver, timeout, *needles, retries=1):
+    """Wait until all needles appear in page body text, reloading once on timeout."""
+    import time
+
+    import pytest
+    from selenium.webdriver.common.by import By
+
+    url = driver.current_url
+    for attempt in range(retries + 1):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            text = driver.find_element(By.TAG_NAME, "body").text
+            lowered = text.lower()
+            if all(needle.lower() in lowered for needle in needles):
+                return text
+            time.sleep(2)
+        if attempt < retries:
+            driver.get(url)
+            time.sleep(5)
+
+    pytest.fail(
+        "Expected page text not found. "
+        f"URL={driver.current_url} needles={needles}"
+    )
+
+
 def sign_in_via_rhdh_popup(driver, config, return_url):
     import time
 
@@ -217,6 +243,24 @@ def sign_in_via_rhdh_popup(driver, config, return_url):
     driver.switch_to.window(main_window)
     driver.get(return_url)
     time.sleep(5)
+    if driver.find_elements(By.XPATH, "//button[normalize-space(.)='Sign In']"):
+        driver.find_element(By.XPATH, "//button[normalize-space(.)='Sign In']").click()
+        WebDriverWait(driver, config["timeout"]).until(lambda d: len(d.window_handles) > 1)
+        popup = next(h for h in driver.window_handles if h != main_window)
+        driver.switch_to.window(popup)
+        username = WebDriverWait(driver, config["timeout"]).until(
+            EC.visibility_of_element_located((By.ID, "username"))
+        )
+        password = driver.find_element(By.ID, "password")
+        username.clear()
+        username.send_keys(config["username"])
+        password.clear()
+        password.send_keys(config["password"])
+        driver.find_element(By.ID, "kc-login").click()
+        WebDriverWait(driver, 60).until(lambda d: len(d.window_handles) == 1)
+        driver.switch_to.window(main_window)
+        driver.get(return_url)
+        time.sleep(5)
 
 
 def dismiss_onboarding(driver):
@@ -230,7 +274,7 @@ def dismiss_onboarding(driver):
         time.sleep(1)
 
 
-def wait_for_techdocs_page(driver, config, *needles):
+def wait_for_techdocs_page(driver, config, *needles, retries=1):
     """Wait for TechDocs content and fail fast on known build errors."""
     import time
 
@@ -244,18 +288,23 @@ def wait_for_techdocs_page(driver, config, *needles):
         "looks like someone dropped the mic",
         "erofs: read-only file system",
     )
-    deadline = time.time() + config["timeout"]
-    while time.time() < deadline:
-        text = driver.find_element(By.TAG_NAME, "body").text
-        lowered = text.lower()
-        for bad in forbidden:
-            if bad in lowered:
-                pytest.fail(
-                    f"TechDocs build error ({bad!r}) at {driver.current_url}\n{text[:500]}"
-                )
-        if all(needle.lower() in lowered for needle in needles):
-            return text
-        time.sleep(3)
+    url = driver.current_url
+    for attempt in range(retries + 1):
+        deadline = time.time() + config["timeout"]
+        while time.time() < deadline:
+            text = driver.find_element(By.TAG_NAME, "body").text
+            lowered = text.lower()
+            for bad in forbidden:
+                if bad in lowered:
+                    pytest.fail(
+                        f"TechDocs build error ({bad!r}) at {driver.current_url}\n{text[:500]}"
+                    )
+            if all(needle.lower() in lowered for needle in needles):
+                return text
+            time.sleep(3)
+        if attempt < retries:
+            driver.get(url)
+            time.sleep(5)
     pytest.fail(
         "TechDocs page did not render expected content. "
         f"URL={driver.current_url} needles={needles}"

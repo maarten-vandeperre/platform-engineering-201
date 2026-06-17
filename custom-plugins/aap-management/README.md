@@ -3,7 +3,7 @@
 Workshop-local dynamic plugin that connects Developer Hub to an external **Ansible Automation Platform Controller** and provides:
 
 - **Templates** tab — paginated job templates with search (name/description) and label filter, plus **Launch**
-- **Run history** tab — paginated job runs with status and outcome
+- **Run history** tab — paginated job runs with status and outcome; click a row to open **job detail** (events with expandable task output, **Task logs** tab, full stdout, workflow progress) with live polling while a run is active
 
 Route: `/aap-management` (sidebar: **AAP Templates**)
 
@@ -74,6 +74,10 @@ Backend API (authenticated Developer Hub user):
 | GET | `/api/aap-management/job-templates` | List templates (`page`, `page_size`, `search`, `labels`) |
 | POST | `/api/aap-management/job-templates/:id/launch` | Launch a template |
 | GET | `/api/aap-management/jobs` | Job run history (`page`, `page_size`, `search`) |
+| GET | `/api/aap-management/jobs/:id` | Job detail (`type=job` or `workflow_job`) |
+| GET | `/api/aap-management/jobs/:id/stdout` | Job stdout (`type` query param) |
+| GET | `/api/aap-management/jobs/:id/events` | Job events (`page`, `page_size`, `type`) |
+| GET | `/api/aap-management/jobs/:id/task-logs` | Per-task Ansible output from job events (`type`) |
 
 ## Files
 

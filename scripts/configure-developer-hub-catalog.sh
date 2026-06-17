@@ -73,7 +73,7 @@ build_techdocs_configmap() {
 
 OPENAPI_RENDERED="$(mktemp)"
 SCAFFOLD_ARCHIVE="$(build_scaffold_archive)"
-envsubst '${WORKSHOP_NAMESPACE} ${CLUSTER_ROUTER_BASE}' \
+workshop_envsubst '${WORKSHOP_NAMESPACE} ${CLUSTER_ROUTER_BASE}' \
   <"${REPO_ROOT}/apps/people-service/openapi/people-api.yaml" >"${OPENAPI_RENDERED}"
 
 oc create configmap workshop-catalog-entities \

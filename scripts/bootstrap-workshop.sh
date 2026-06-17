@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+# Re-exec with bash when invoked as `sh script.sh` (dash / macOS posix sh lack bash features).
+if [ -z "${BASH_VERSION:-}" ] || [ -n "${POSIXLY_CORRECT:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

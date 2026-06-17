@@ -34,7 +34,7 @@ oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
   --dry-run=client -o yaml | oc apply -f -
 
 VALUES_FILE="$(mktemp)"
-envsubst '${CLUSTER_ROUTER_BASE} ${RHDH_APP_TITLE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${GITHUB_TOKEN}' \
+workshop_envsubst '${CLUSTER_ROUTER_BASE} ${RHDH_APP_TITLE} ${WORKSHOP_GIT_REPO} ${WORKSHOP_GIT_BRANCH} ${KEYCLOAK_URL} ${KEYCLOAK_REALM} ${RHDH_KEYCLOAK_CLIENT_ID} ${RHDH_OIDC_CLIENT_SECRET} ${ARGOCD_URL} ${ARGOCD_TOKEN} ${GITHUB_TOKEN}' \
   <"${MANIFESTS_DIR}/../helm/rhdh-values.yaml" >"${VALUES_FILE}"
 
 helm upgrade --install redhat-developer-hub "${RHDH_HELM_CHART}" \

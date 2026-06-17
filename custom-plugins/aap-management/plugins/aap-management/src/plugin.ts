@@ -103,6 +103,66 @@ export function useAapManagementApi() {
         }
         return response.json();
       },
+      async getJob(id: number, jobType: 'job' | 'workflow_job' = 'job') {
+        const query =
+          jobType === 'workflow_job' ? '?type=workflow_job' : '';
+        const response = await fetchApi.fetch(
+          `${await baseUrl()}/jobs/${id}${query}`,
+        );
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        return response.json();
+      },
+      async getJobStdout(id: number, jobType: 'job' | 'workflow_job' = 'job') {
+        const query =
+          jobType === 'workflow_job' ? '?type=workflow_job' : '';
+        const response = await fetchApi.fetch(
+          `${await baseUrl()}/jobs/${id}/stdout${query}`,
+        );
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        return response.json();
+      },
+      async getJobEvents(
+        id: number,
+        jobType: 'job' | 'workflow_job' = 'job',
+        params: { page?: number; pageSize?: number } = {},
+      ) {
+        const query = new URLSearchParams();
+        if (jobType === 'workflow_job') {
+          query.set('type', 'workflow_job');
+        }
+        if (params.page) {
+          query.set('page', String(params.page));
+        }
+        if (params.pageSize) {
+          query.set('page_size', String(params.pageSize));
+        }
+        const suffix = query.toString() ? `?${query.toString()}` : '';
+        const response = await fetchApi.fetch(
+          `${await baseUrl()}/jobs/${id}/events${suffix}`,
+        );
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        return response.json();
+      },
+      async getJobTaskLogs(
+        id: number,
+        jobType: 'job' | 'workflow_job' = 'job',
+      ) {
+        const query =
+          jobType === 'workflow_job' ? '?type=workflow_job' : '';
+        const response = await fetchApi.fetch(
+          `${await baseUrl()}/jobs/${id}/task-logs${query}`,
+        );
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
+        return response.json();
+      },
     };
   }, [discoveryApi, fetchApi]);
 }

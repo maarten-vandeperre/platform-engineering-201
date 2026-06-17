@@ -29,9 +29,9 @@ ADMIN_PASS=""
 for secret_name in "${ARGOCD_INSTANCE_NAME}-cluster" "argocd-cluster" "argocd-initial-admin-secret"; do
   if oc get secret "${secret_name}" -n "${GITOPS_NAMESPACE}" >/dev/null 2>&1; then
     ADMIN_PASS=$(oc get secret "${secret_name}" -n "${GITOPS_NAMESPACE}" \
-      -o jsonpath='{.data.admin\.password}' 2>/dev/null | base64 -d || true)
+      -o jsonpath='{.data.admin\.password}' 2>/dev/null | base64_decode || true)
     [[ -z "${ADMIN_PASS}" ]] && ADMIN_PASS=$(oc get secret "${secret_name}" -n "${GITOPS_NAMESPACE}" \
-      -o jsonpath='{.data.password}' 2>/dev/null | base64 -d || true)
+      -o jsonpath='{.data.password}' 2>/dev/null | base64_decode || true)
     [[ -n "${ADMIN_PASS}" ]] && break
   fi
 done

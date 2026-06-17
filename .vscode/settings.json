@@ -1,0 +1,15 @@
+{
+  "java.jdt.ls.java.home": "/usr/lib/jvm/java-25",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-25",
+      "path": "/usr/lib/jvm/java-25",
+      "default": true
+    }
+  ],
+  "java.import.maven.enabled": true,
+  "terminal.integrated.env.linux": {
+    "JAVA_HOME": "/usr/lib/jvm/java-25",
+    "PATH": "/usr/lib/jvm/java-25/bin:/usr/local/bin:${env:PATH}"
+  }
+}

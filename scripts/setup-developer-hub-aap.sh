@@ -119,7 +119,7 @@ ensure_registry_pull_secret() {
   if [[ -n "${RH_REGISTRY_PULL_SECRET:-}" ]]; then
     oc get secret "${RH_REGISTRY_PULL_SECRET}" -n "${RHDH_NAMESPACE}" \
       -o jsonpath='{.data.\.dockerconfigjson}' \
-      | base64 -d > /tmp/rhdh-dockerconfig.json
+      | base64_decode > /tmp/rhdh-dockerconfig.json
     python3 - <<'PY' /tmp/rhdh-dockerconfig.json > /tmp/rhdh-auth.json
 import json, sys
 with open(sys.argv[1], encoding="utf-8") as handle:

@@ -81,10 +81,10 @@ aap_read_admin_password_from_cluster() {
   fi
 
   value="$(oc get secret "${secret_name}" -n "${WORKSHOP_NAMESPACE}" \
-    -o jsonpath='{.data.password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+    -o jsonpath='{.data.password}' 2>/dev/null | base64_decode 2>/dev/null || true)"
   if [[ -z "${value}" ]]; then
     value="$(oc get secret "${secret_name}" -n "${WORKSHOP_NAMESPACE}" \
-      -o jsonpath='{.data.admin_password}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+      -o jsonpath='{.data.admin_password}' 2>/dev/null | base64_decode 2>/dev/null || true)"
   fi
 
   if [[ -n "${value}" ]]; then
@@ -164,7 +164,7 @@ aap_try_detect_rh_registry() {
 
   tmp_docker="$(mktemp)"
   if ! oc get secret "${secret}" -n "${WORKSHOP_NAMESPACE}" \
-    -o jsonpath='{.data.\.dockerconfigjson}' 2>/dev/null | base64 -d >"${tmp_docker}" 2>/dev/null; then
+    -o jsonpath='{.data.\.dockerconfigjson}' 2>/dev/null | base64_decode >"${tmp_docker}" 2>/dev/null; then
     rm -f "${tmp_docker}"
     return 1
   fi

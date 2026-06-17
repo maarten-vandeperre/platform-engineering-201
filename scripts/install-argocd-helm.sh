@@ -24,7 +24,7 @@ helm repo add argo https://argoproj.github.io/argo-helm 2>/dev/null || true
 helm repo update argo >/dev/null
 
 VALUES_FILE="$(mktemp)"
-envsubst '${ARGOCD_ROUTE_HOST} ${ARGOCD_ADMIN_PASSWORD} ${ARGOCD_INSTALL_CRDS}' \
+workshop_envsubst '${ARGOCD_ROUTE_HOST} ${ARGOCD_ADMIN_PASSWORD} ${ARGOCD_INSTALL_CRDS}' \
   <"${MANIFESTS_DIR}/../helm/argocd-values-minimal.yaml" >"${VALUES_FILE}"
 
 if [[ "${ARGOCD_INSTALL_CRDS:-true}" == "true" ]]; then

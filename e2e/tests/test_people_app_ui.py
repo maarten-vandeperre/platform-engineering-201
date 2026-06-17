@@ -36,11 +36,18 @@ def _sign_in_to_people_frontend(driver, config):
 
     if "keycloak" in driver.current_url.lower():
         assert "keycloak-" in driver.current_url.lower()
-        _wait_for(
-            driver,
-            config["timeout"],
-            EC.visibility_of_element_located((By.ID, "username")),
-        )
+        try:
+            _wait_for(
+                driver,
+                config["timeout"],
+                EC.visibility_of_element_located((By.ID, "username")),
+            )
+        except Exception:
+            body = driver.find_element(By.TAG_NAME, "body").text[:500]
+            pytest.fail(
+                "Keycloak login form did not load for People frontend. "
+                f"URL={driver.current_url} body={body}"
+            )
         driver.find_element(By.ID, "username").clear()
         driver.find_element(By.ID, "username").send_keys(config["people_username"])
         driver.find_element(By.ID, "password").clear()

@@ -20,7 +20,7 @@ import RefreshIcon from '@material-ui/icons/Refresh';
 import { Alert } from '@material-ui/lab';
 import { useDebouncedValue } from '../hooks';
 import { useAapManagementApi } from '../plugin';
-import { AapJob, AapPagedResponse } from '../types';
+import { AapJob, AapJobRef, AapPagedResponse } from '../types';
 
 const PAGE_SIZE = 10;
 
@@ -44,7 +44,15 @@ function formatWhen(value?: string | null) {
   return new Date(value).toLocaleString();
 }
 
-export function JobHistoryTab() {
+function isActiveRun(status: string) {
+  return status === 'running' || status === 'pending' || status === 'waiting';
+}
+
+type JobHistoryTabProps = {
+  onSelectJob: (job: AapJobRef) => void;
+};
+
+export function JobHistoryTab({ onSelectJob }: JobHistoryTabProps) {
   const api = useAapManagementApi();
   const [page, setPage] = React.useState(0);
   const [search, setSearch] = React.useState('');
@@ -75,6 +83,17 @@ export function JobHistoryTab() {
   React.useEffect(() => {
     load();
   }, [load]);
+
+  React.useEffect(() => {
+    const hasActive = (data?.results ?? []).some(job => isActiveRun(job.status));
+    if (!hasActive) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      load();
+    }, 8000);
+    return () => window.clearInterval(timer);
+  }, [data?.results, load]);
 
   return (
     <>
@@ -121,12 +140,24 @@ export function JobHistoryTab() {
                   <TableCell>Status</TableCell>
                   <TableCell>Started</TableCell>
                   <TableCell>Finished</TableCell>
+                  <TableCell>Elapsed</TableCell>
                   <TableCell>Outcome</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {(data?.results ?? []).map(job => (
-                  <TableRow key={job.id}>
+                  <TableRow
+                    key={job.id}
+                    hover
+                    style={{ cursor: 'pointer' }}
+                    onClick={() =>
+                      onSelectJob({
+                        id: job.id,
+                        jobType:
+                          job.jobType === 'workflow_job' ? 'workflow_job' : 'job',
+                      })
+                    }
+                  >
                     <TableCell>
                       <Typography variant="body2">
                         <strong>{job.name}</strong>
@@ -150,6 +181,11 @@ export function JobHistoryTab() {
                     <TableCell>{formatWhen(job.started)}</TableCell>
                     <TableCell>{formatWhen(job.finished)}</TableCell>
                     <TableCell>
+                      {job.elapsed !== undefined && job.elapsed !== null
+                        ? `${job.elapsed}s`
+                        : '—'}
+                    </TableCell>
+                    <TableCell>
                       {job.failed
                         ? 'Failed'
                         : job.status === 'successful'
@@ -162,7 +198,7 @@ export function JobHistoryTab() {
                 ))}
                 {!refreshing && (data?.results?.length ?? 0) === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6}>
+                    <TableCell colSpan={7}>
                       <Typography variant="body2" color="textSecondary">
                         No job runs found.
                       </Typography>
