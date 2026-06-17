@@ -2,60 +2,45 @@ schemaVersion: 2.1.0
 metadata:
   name: platform-engineering-201
   displayName: Platform Engineering 201 Workshop
-  description: >
-    Workshop workspace with Java 25 (ubi9/openjdk-25), Maven, Node.js 22 LTS/npm/yarn,
-    and OpenShift tooling to run scripts/bootstrap-workshop.sh in Dev Spaces.
-    Recreate the workspace after changing this file (Stop workspace → Start).
+  description: Workshop workspace with Java 21, Maven, Node.js 22, and OpenShift tooling.
   tags:
-    - java-25
+    - java-21
     - nodejs-22
     - openshift
     - developer-hub
-  language: java
 
 components:
-  # Devfile 2.1.0: container.image only (no image/dockerfile component type).
-  # Uses ubi9/openjdk-25; workspace-setup runs devfile/install-tools.sh for Node 22, oc, helm, etc.
-  # Optional: build devfile/Dockerfile and set image to your registry tag for pre-baked tools.
   - name: dev
     container:
-      image: registry.access.redhat.com/ubi9/openjdk-25:latest
+      image: registry.redhat.io/ubi9/openjdk-21:latest
       mountSources: true
       memoryLimit: 12Gi
       memoryRequest: 4Gi
       cpuLimit: 4000m
       cpuRequest: 1000m
       env:
-        - name: HOME
-          value: /home/jboss
         - name: JAVA_HOME
-          value: /usr/lib/jvm/java-25
-        - name: PATH
-          value: /usr/local/bin:/usr/lib/jvm/java-25/bin:/usr/bin:/bin
+          value: /usr/lib/jvm/java-21
         - name: MAVEN_OPTS
-          value: -Dmaven.repo.local=/home/jboss/.m2/repository
+          value: -Dmaven.repo.local=/home/default/.m2/repository
         - name: NODE_OPTIONS
           value: --max-old-space-size=4096
       volumeMounts:
         - name: m2
-          path: /home/jboss/.m2
+          path: /home/default/.m2
         - name: npm-cache
-          path: /home/jboss/.npm
+          path: /home/default/.npm
         - name: yarn-cache
-          path: /home/jboss/.cache/yarn
+          path: /home/default/.cache/yarn
       endpoints:
         - name: people-frontend
           exposure: public
           protocol: http
           targetPort: 5173
-          attributes:
-            discoverable: true
         - name: people-backend
           exposure: public
           protocol: http
           targetPort: 8080
-          attributes:
-            discoverable: true
 
   - name: m2
     volume:
@@ -79,17 +64,16 @@ commands:
         cd "${REPO}"
         chmod +x scripts/*.sh scripts/lib/*.sh devfile/install-tools.sh 2>/dev/null || true
 
-        if ! java -version 2>&1 | grep -q 'version "25"'; then
-          echo "WARNING: Java 25 not active (got: $(java -version 2>&1 | head -1))"
-          echo "Installing user-level tools and ensuring JAVA_HOME..."
-          export JAVA_HOME="/usr/lib/jvm/java-25"
-          export PATH="/usr/lib/jvm/java-25/bin:/usr/local/bin:${PATH}"
-          if [[ -x /usr/lib/jvm/java-25/bin/java ]]; then
-            ln -sf /usr/lib/jvm/java-25/bin/java "${HOME}/.local/bin/java" 2>/dev/null || true
+        if ! java -version 2>&1 | grep -qE 'version "21'; then
+          echo "WARNING: Java 21 not active (got: $(java -version 2>&1 | head -1))"
+          export JAVA_HOME="/usr/lib/jvm/java-21"
+          export PATH="/usr/lib/jvm/java-21/bin:/home/default/.local/bin:${PATH}"
+          if [[ -x /usr/lib/jvm/java-21/bin/java ]]; then
+            mkdir -p "${HOME}/.local/bin"
+            ln -sf /usr/lib/jvm/java-21/bin/java "${HOME}/.local/bin/java" 2>/dev/null || true
           else
-            echo "ERROR: This workspace is not using ubi9/openjdk-25."
-            echo "Stop the workspace and create a new one from this repository's devfile.yaml"
-            echo "(do not use the generic Java 17 sample)."
+            echo "ERROR: Expected ubi9/openjdk-21 image (JAVA_HOME=/usr/lib/jvm/java-21)."
+            echo "Stop the workspace and create a new one from branch 20260614-enable-ansible."
             bash devfile/install-tools.sh || true
             exit 1
           fi
@@ -164,8 +148,6 @@ commands:
     exec:
       component: dev
       commandLine: mvn -B -f apps/people-service/backend/pom.xml clean package -DskipTests
-      group:
-        kind: build
 
   - id: build-people-frontend
     exec:
@@ -173,15 +155,11 @@ commands:
       commandLine: |
         set -euo pipefail
         cd apps/people-service/frontend && npm ci && npm run build
-      group:
-        kind: build
 
   - id: build-aap-management-plugin
     exec:
       component: dev
       commandLine: ./scripts/build-custom-aap-management-plugin.sh
-      group:
-        kind: build
 
   - id: dev-people-frontend
     exec:
@@ -189,9 +167,6 @@ commands:
       commandLine: |
         set -euo pipefail
         cd apps/people-service/frontend && npm ci && npm run dev -- --host 0.0.0.0 --port 5173
-      group:
-        kind: run
-        isDefault: true
 
 events:
   postStart:

@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Fallback installer when the workspace runs the base ubi9/openjdk-25 image
-# without the custom Dockerfile build (user-level tools into ~/.local).
 set -euo pipefail
 
 BIN_DIR="${HOME}/.local/bin"
@@ -61,5 +59,5 @@ install_oc
 install_helm
 install_node
 
-echo "JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/java-25}"
+echo "JAVA_HOME=${JAVA_HOME:-/usr/lib/jvm/java-21}"
 java -version 2>&1 | head -1
