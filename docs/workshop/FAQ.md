@@ -88,6 +88,41 @@ On sandbox, slow plugin install can hit Helm’s wait timeout. Newer scripts use
 
 If the pod is in **CrashLoopBackOff** or **ImagePullBackOff**, increasing the timeout will not help — fix the underlying error (often registry auth; see below).
 
+### `MountVolume.SetUp failed` — `workshop-catalog-entities` not found
+
+Developer Hub (and the TechDocs deployment patch) mount ConfigMap `workshop-catalog-entities` as the `catalog-entities` volume. If bootstrap or config runs before that ConfigMap exists, pods stay in **ContainerCreating** with:
+
+```text
+MountVolume.SetUp failed for volume "catalog-entities" : configmap "workshop-catalog-entities" not found
+```
+
+**Fix:**
+
+```bash
+./scripts/configure-developer-hub-catalog.sh
+./scripts/setup-developer-hub-config.sh
+```
+
+Or re-run bootstrap after pulling the latest scripts (they create the ConfigMap before Helm install and before any rollout that mounts it):
+
+```bash
+git pull
+./scripts/bootstrap-workshop.sh
+```
+
+### `Multi-Attach` error for `dynamic-plugins-root` / `workshop-plugins-pvc-probe`
+
+During rollout, scripts may probe the dynamic-plugins PVC to see if Ansible plugins are cached. A short-lived probe pod (`workshop-plugins-pvc-probe`) must not run while a Developer Hub pod already holds that PVC (for example during `install-dynamic-plugins`).
+
+If you see Multi-Attach errors involving `workshop-plugins-pvc-probe`, delete the probe pod and retry:
+
+```bash
+oc delete pod workshop-plugins-pvc-probe -n "$WORKSHOP_NAMESPACE" --ignore-not-found
+./scripts/repair-developer-hub.sh
+```
+
+Newer scripts skip the probe when any pod already mounts `dynamic-plugins-root`.
+
 ---
 
 ## Red Hat Container Registry (Ansible plugins)

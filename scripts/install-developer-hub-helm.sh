@@ -38,6 +38,9 @@ if is_aap_enabled; then
   "${SCRIPT_DIR}/setup-developer-hub-aap.sh" --no-rollout
 fi
 
+echo "Ensuring workshop catalog entities ConfigMap exists before Developer Hub rollout..."
+ensure_catalog_entities_configmap
+
 oc create secret generic rhdh-workshop-secrets -n "${RHDH_NAMESPACE}" \
   --from-literal=ARGOCD_URL="${ARGOCD_URL}" \
   --from-literal=ARGOCD_TOKEN="${ARGOCD_TOKEN}" \

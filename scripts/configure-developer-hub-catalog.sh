@@ -23,35 +23,6 @@ if [[ -z "${KEYCLOAK_URL:-}" ]] && oc get route keycloak -n "${WORKSHOP_NAMESPAC
 fi
 resolve_keycloak_urls
 
-extract_entities_yaml() {
-  render_manifest "${MANIFESTS_DIR}/developer-hub/catalog-configmap.yaml" | awk '
-    /^  entities.yaml: \|/ { in_entities=1; next }
-    in_entities && /^  [^ ]/ { exit }
-    in_entities { sub(/^    /, ""); print }
-  '
-}
-
-append_organization_entities() {
-  render_manifest "${MANIFESTS_DIR}/catalog/entities/organization-model.yaml"
-  render_manifest "${MANIFESTS_DIR}/catalog/entities/workshop-organization.yaml"
-}
-
-build_entities_yaml() {
-  append_organization_entities
-  printf '\n---\n'
-  extract_entities_yaml
-}
-
-build_scaffold_archive() {
-  local scaffold_dir="${REPO_ROOT}/apps/people-service-scaffold"
-  local archive
-  archive="$(mktemp)"
-
-  tar --exclude='node_modules' --exclude='target' --exclude='.git' --exclude='dist' \
-    -czf "${archive}" -C "${scaffold_dir}" .
-  echo "${archive}"
-}
-
 build_techdocs_configmap() {
   local techdocs_dir="${MANIFESTS_DIR}/techdocs"
   local site
@@ -71,26 +42,7 @@ build_techdocs_configmap() {
   done
 }
 
-OPENAPI_RENDERED="$(mktemp)"
-SCAFFOLD_ARCHIVE="$(build_scaffold_archive)"
-workshop_envsubst '${WORKSHOP_NAMESPACE} ${CLUSTER_ROUTER_BASE}' \
-  <"${REPO_ROOT}/apps/people-service/openapi/people-api.yaml" >"${OPENAPI_RENDERED}"
-
-oc create configmap workshop-catalog-entities \
-  -n "${WORKSHOP_NAMESPACE}" \
-  --from-literal=entities.yaml="$(build_entities_yaml)" \
-  --from-file=people-api.yaml="${OPENAPI_RENDERED}" \
-  --from-file=tech-radar.json="${MANIFESTS_DIR}/catalog/tech-radar.json" \
-  --from-file=learning-paths.json="${MANIFESTS_DIR}/developer-hub/learning-paths.json" \
-  --from-file=people-service-scaffold.tar.gz="${SCAFFOLD_ARCHIVE}" \
-  --dry-run=client -o yaml \
-  | oc apply -f -
-
-rm -f "${OPENAPI_RENDERED}" "${SCAFFOLD_ARCHIVE}"
-
-oc label configmap workshop-catalog-entities \
-  -n "${WORKSHOP_NAMESPACE}" \
-  app.kubernetes.io/part-of=developer-hub --overwrite
+ensure_catalog_entities_configmap
 
 echo "Publishing TechDocs sources..."
 build_techdocs_configmap

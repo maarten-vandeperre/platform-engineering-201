@@ -74,6 +74,7 @@ echo "== Keycloak + People Service =="
 
 echo ""
 echo "== Developer Hub =="
+ensure_catalog_entities_configmap
 install_developer_hub
 
 if argocd_enabled; then

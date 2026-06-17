@@ -14,6 +14,7 @@ echo "Configuring Developer Hub Keycloak SSO in ${RHDH_NAMESPACE}..."
 require_oc
 
 ensure_workshop_platform
+ensure_catalog_entities_configmap
 
 resolve_keycloak_urls
 

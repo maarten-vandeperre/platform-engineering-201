@@ -12,6 +12,8 @@ if ! oc get deployment redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>
   exit 0
 fi
 
+ensure_catalog_entities_configmap
+
 build_flat_techdocs_configmap() {
   local site="$1"
   local src="${MANIFESTS_DIR}/techdocs/${site}"

@@ -1412,10 +1412,70 @@ ensure_rhdh_postgres() {
   fi
 }
 
+_catalog_extract_entities_yaml() {
+  render_manifest "${MANIFESTS_DIR}/developer-hub/catalog-configmap.yaml" | awk '
+    /^  entities.yaml: \|/ { in_entities=1; next }
+    in_entities && /^  [^ ]/ { exit }
+    in_entities { sub(/^    /, ""); print }
+  '
+}
+
+_catalog_append_organization_entities() {
+  render_manifest "${MANIFESTS_DIR}/catalog/entities/organization-model.yaml"
+  render_manifest "${MANIFESTS_DIR}/catalog/entities/workshop-organization.yaml"
+}
+
+_catalog_build_entities_yaml() {
+  _catalog_append_organization_entities
+  printf '\n---\n'
+  _catalog_extract_entities_yaml
+}
+
+_catalog_build_scaffold_archive() {
+  local scaffold_dir="${REPO_ROOT}/apps/people-service-scaffold"
+  local archive
+  archive="$(mktemp)"
+  tar --exclude='node_modules' --exclude='target' --exclude='.git' --exclude='dist' \
+    -czf "${archive}" -C "${scaffold_dir}" .
+  echo "${archive}"
+}
+
+# Create or refresh workshop-catalog-entities before any workload mounts catalog-entities volume.
+ensure_catalog_entities_configmap() {
+  require_oc
+  if [[ -z "${CLUSTER_ROUTER_BASE:-}" ]]; then
+    detect_cluster_router_base
+  fi
+
+  local openapi_rendered scaffold_archive
+  openapi_rendered="$(mktemp)"
+  scaffold_archive="$(_catalog_build_scaffold_archive)"
+  workshop_envsubst '${WORKSHOP_NAMESPACE} ${CLUSTER_ROUTER_BASE}' \
+    <"${REPO_ROOT}/apps/people-service/openapi/people-api.yaml" >"${openapi_rendered}"
+
+  oc create configmap workshop-catalog-entities \
+    -n "${WORKSHOP_NAMESPACE}" \
+    --from-literal=entities.yaml="$(_catalog_build_entities_yaml)" \
+    --from-file=people-api.yaml="${openapi_rendered}" \
+    --from-file=tech-radar.json="${MANIFESTS_DIR}/catalog/tech-radar.json" \
+    --from-file=learning-paths.json="${MANIFESTS_DIR}/developer-hub/learning-paths.json" \
+    --from-file=people-service-scaffold.tar.gz="${scaffold_archive}" \
+    --dry-run=client -o yaml \
+    | oc apply -f -
+
+  rm -f "${openapi_rendered}" "${scaffold_archive}"
+
+  oc label configmap workshop-catalog-entities \
+    -n "${WORKSHOP_NAMESPACE}" \
+    app.kubernetes.io/part-of=developer-hub --overwrite
+}
+
 ensure_catalog_server() {
   if ! oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
     return 0
   fi
+
+  ensure_catalog_entities_configmap
 
   local replicas ready replica_failure
   replicas=$(oc get deployment workshop-catalog-server -n "${WORKSHOP_NAMESPACE}" \

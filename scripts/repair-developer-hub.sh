@@ -9,6 +9,7 @@ echo "Repairing Developer Hub platform in ${RHDH_NAMESPACE}..."
 
 require_oc
 ensure_workshop_platform
+ensure_catalog_entities_configmap
 
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/developer-hub-dynamic-plugins.sh"
