@@ -18,6 +18,7 @@ This workshop installs **Red Hat Developer Hub** on OpenShift, deploys a sample 
 | `scripts/` | Bootstrap and helper scripts (configurable via `workshop.env`) |
 | `e2e/` | Selenium end-to-end tests against the live cluster |
 | `docs/workshop/` | Step-by-step workshop documentation |
+| `docs/workshop/FAQ.md` | **FAQ** — common bootstrap, registry, rollout, and URL issues |
 | `docs/workshop/TUTORIAL.md` | **Master tutorial** (clean sandbox → full state) |
 
 ## Day 0 → Done (recommended path)

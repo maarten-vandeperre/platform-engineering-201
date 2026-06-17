@@ -1,5 +1,7 @@
 # 8. Validation and troubleshooting
 
+See **[FAQ.md](FAQ.md)** for common bootstrap issues (registry auth, rollout waits, plugin lock, wrong URLs, GitHub OAuth).
+
 ## Automated validation
 
 ```bash
