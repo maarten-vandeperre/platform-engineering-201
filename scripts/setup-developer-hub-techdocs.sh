@@ -56,12 +56,34 @@ backstage_has_catalog_entities_mount() {
        | select(.name == "catalog-entities" and .mountPath == "/catalog/entities.yaml")' >/dev/null 2>&1
 }
 
+wait_for_techdocs_workspace() {
+  local pod i
+  echo "Waiting for TechDocs workspace in Developer Hub pod..."
+  for i in $(seq 1 30); do
+    pod="$(oc get pod -n "${RHDH_NAMESPACE}" -l app.kubernetes.io/name=developer-hub \
+      -o jsonpath='{.items[?(@.status.phase=="Running")].metadata.name}' 2>/dev/null \
+      | awk '{print $1}')"
+    if [[ -n "${pod}" ]] \
+      && oc exec -n "${RHDH_NAMESPACE}" "${pod}" -c backstage-backend -- \
+        test -f /catalog/techdocs/quarkus-guide/mkdocs.yml 2>/dev/null; then
+      echo "TechDocs workspace is ready in ${pod}."
+      return 0
+    fi
+    if (( i == 30 )); then
+      echo "Note: TechDocs workspace not verified yet; files appear after prepare-techdocs init completes." >&2
+      return 0
+    fi
+    sleep 10
+  done
+}
+
 echo "Preparing TechDocs file sources for Developer Hub in ${RHDH_NAMESPACE}..."
 build_flat_techdocs_configmap "quarkus-guide"
 build_flat_techdocs_configmap "adrs"
 
 if deployment_has_techdocs && backstage_has_techdocs_mount && backstage_has_catalog_entities_mount; then
   echo "TechDocs init container and volume mounts already configured."
+  wait_for_techdocs_workspace
   exit 0
 fi
 
@@ -77,6 +99,8 @@ else
   oc rollout restart deployment/redhat-developer-hub -n "${RHDH_NAMESPACE}"
   wait_for_developer_hub_rollout redhat-developer-hub 600s
 fi
+
+wait_for_techdocs_workspace
 
 echo "TechDocs volumes configured on Developer Hub deployment."
 echo "Open Documentation tabs:"

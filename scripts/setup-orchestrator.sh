@@ -4,6 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/orchestrator.sh"
 
 echo "Setting up Orchestrator for Developer Hub in ${WORKSHOP_NAMESPACE}..."
 
@@ -42,49 +44,6 @@ EOF
 oc apply -f "${SCHEMAS_CM}"
 rm -f "${SCHEMAS_CM}"
 
-has_sonataflow_crd() {
-  oc api-resources 2>/dev/null | awk '{print $1}' | grep -qx 'sonataflows'
-}
-
-wait_for_data_index() {
-  echo "Waiting for sonataflow-platform-data-index-service..."
-  for i in $(seq 1 60); do
-    if oc get svc sonataflow-platform-data-index-service -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1 \
-      && oc get deployment sonataflow-platform-data-index -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
-      ready=$(oc get deployment sonataflow-platform-data-index -n "${WORKSHOP_NAMESPACE}" \
-        -o jsonpath='{.status.readyReplicas}' 2>/dev/null || true)
-      if [[ "${ready:-0}" == "1" ]]; then
-        echo "Data Index service is ready."
-        return 0
-      fi
-    fi
-    if oc get sonataflowplatform sonataflow-platform -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
-      endpoint=$(oc get sonataflowplatform sonataflow-platform -n "${WORKSHOP_NAMESPACE}" \
-        -o jsonpath='{.status.services.dataIndex.endpoint}' 2>/dev/null || true)
-      if [[ -n "${endpoint}" ]]; then
-        echo "SonataFlowPlatform Data Index is ready at ${endpoint}."
-        return 0
-      fi
-    fi
-    if (( i == 60 )); then
-      echo "Warning: timed out waiting for Data Index service." >&2
-      echo "Check: oc get deploy,svc,pods -n ${WORKSHOP_NAMESPACE} | grep -i sonata" >&2
-      return 1
-    fi
-    sleep 10
-  done
-}
-
-deploy_standalone_data_index() {
-  export ORCHESTRATOR_DATA_INDEX_IMAGE="${ORCHESTRATOR_DATA_INDEX_IMAGE:-registry.redhat.io/openshift-serverless-1/logic-data-index-postgresql-rhel8:1.36.0}"
-  echo "Deploying standalone Data Index service (Serverless Logic operator not detected)..."
-  echo "Using image: ${ORCHESTRATOR_DATA_INDEX_IMAGE}"
-  render_manifest "${MANIFESTS_DIR}/orchestrator/data-index.yaml" | oc apply -f -
-  oc wait --for=condition=complete job/sonataflow-create-db -n "${WORKSHOP_NAMESPACE}" --timeout=300s \
-    || echo "Warning: sonataflow database job did not complete in time." >&2
-  wait_for_data_index || true
-}
-
 apply_workflow_configmaps() {
   DEFINITION_CM="$(mktemp)"
   cat >"${DEFINITION_CM}" <<EOF
@@ -115,6 +74,7 @@ verify_workflow_input_schema() {
     echo "Skipping inputSchema check (standalone create-person-workflow not deployed)."
     return 0
   fi
+  local i response
   for i in $(seq 1 30); do
     response="$(oc exec -n "${WORKSHOP_NAMESPACE}" deploy/create-person-workflow -- \
       curl -sf "${service_url}" 2>/dev/null || true)"
@@ -132,7 +92,6 @@ verify_workflow_input_schema() {
 }
 
 deploy_standalone_workflow() {
-  REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
   apply_workflow_configmaps
   render_manifest "${MANIFESTS_DIR}/orchestrator/create-person-workflow.yaml" | oc apply -f -
 
@@ -153,27 +112,27 @@ deploy_standalone_workflow() {
   echo "create-person workflow registered in Data Index."
 }
 
-enable_orchestrator_via_helm() {
-  if ! command -v helm >/dev/null 2>&1; then
-    return 1
-  fi
-  if ! helm status redhat-developer-hub -n "${RHDH_NAMESPACE}" >/dev/null 2>&1; then
-    return 1
-  fi
+if ! data_index_is_ready; then
+  if has_sonataflow_crd; then
+    enable_orchestrator_via_helm || deploy_standalone_data_index
+  else
+    cat <<'ORCH_WARN_EOF' >&2
+OpenShift Serverless Logic is not installed on this cluster.
 
-  echo "Enabling Orchestrator SonataFlowPlatform via Helm..."
-  helm upgrade redhat-developer-hub "${RHDH_HELM_CHART:-https://github.com/openshift-helm-charts/charts/releases/download/redhat-redhat-developer-hub-1.9.3/redhat-developer-hub-1.9.3.tgz}" \
-    -n "${RHDH_NAMESPACE}" \
-    --reuse-values \
-    --set orchestrator.enabled=true \
-    --set orchestrator.serverlessOperator.enabled=false \
-    --set orchestrator.serverlessLogicOperator.enabled=true \
-    --wait --timeout 15m
-}
+Deploying a standalone Data Index service so the Orchestrator UI can load.
+Workflow execution requires the Serverless Logic operator. A cluster
+administrator can install it once with:
+
+  ./scripts/install-orchestrator-infra.sh
+
+Then re-run:
+  ./scripts/setup-orchestrator.sh
+ORCH_WARN_EOF
+    deploy_standalone_data_index
+  fi
+fi
 
 if has_sonataflow_crd; then
-  enable_orchestrator_via_helm || deploy_standalone_data_index
-
   echo "Deploying create-person workflow (SonataFlow)..."
   render_manifest "${MANIFESTS_DIR}/orchestrator/create-person-sonataflow.yaml" | oc apply -f -
   echo "Waiting for create-person workflow pod..."
@@ -189,20 +148,7 @@ if has_sonataflow_crd; then
     fi
     sleep 10
   done
-else
-  cat <<'ORCH_WARN_EOF' >&2
-OpenShift Serverless Logic is not installed on this cluster.
-
-Deploying a standalone Data Index service so the Orchestrator UI can load.
-Workflow execution requires the Serverless Logic operator. A cluster
-administrator can install it once with:
-
-  ./scripts/install-orchestrator-infra.sh
-
-Then re-run:
-  ./scripts/setup-orchestrator.sh
-ORCH_WARN_EOF
-  deploy_standalone_data_index
+elif ! oc get deployment create-person-workflow -n "${WORKSHOP_NAMESPACE}" >/dev/null 2>&1; then
   deploy_standalone_workflow
 fi
 
@@ -210,8 +156,19 @@ if oc get deployment create-person-workflow -n "${WORKSHOP_NAMESPACE}" >/dev/nul
   verify_workflow_input_schema "http://localhost:8080/management/processes/create-person"
 fi
 
-echo "Enabling Orchestrator plugins in Developer Hub..."
-"${SCRIPTS_DIR}/setup-developer-hub-config.sh"
+orchestrator_skip_config() {
+  case "${ORCHESTRATOR_SKIP_CONFIG:-}" in
+    true | TRUE | yes | YES | 1) return 0 ;;
+  esac
+  return 1
+}
+
+if orchestrator_skip_config; then
+  echo "Skipping Developer Hub config re-apply (ORCHESTRATOR_SKIP_CONFIG is set)."
+else
+  echo "Enabling Orchestrator plugins in Developer Hub..."
+  "${SCRIPTS_DIR}/setup-developer-hub-config.sh"
+fi
 
 RHDH_HOST="$(resolve_rhdh_host)"
 echo ""

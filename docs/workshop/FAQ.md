@@ -261,6 +261,45 @@ Pull the latest `main` — helper functions live in `scripts/lib/common.sh`.
 
 ---
 
+## Orchestrator and TechDocs
+
+### `ENOTFOUND sonataflow-platform-data-index-service` in RHDH logs
+
+Developer Hub was starting before the Orchestrator **Data Index** service existed. Newer bootstrap runs `ensure_orchestrator_data_index` **before** `setup-developer-hub-config.sh`.
+
+**Fix after an older bootstrap:**
+
+```bash
+./scripts/setup-orchestrator.sh
+./scripts/setup-developer-hub-config.sh
+```
+
+To skip Orchestrator entirely (no Data Index, no workflow tab):
+
+```bash
+export SKIP_ORCHESTRATOR=true
+./scripts/bootstrap-workshop.sh
+```
+
+### TechDocs `search_index.json` 404 or “indexer received 0 documents”
+
+This is often **transient** right after the first RHDH rollout. The TechDocs search indexer builds `search_index.json` in the background (usually within 1–2 minutes after the backend pod is ready and catalog entities are loaded).
+
+Bootstrap now applies TechDocs volumes **before** enabling the TechDocs plugin. If you still see 404s immediately after bootstrap, wait a minute and refresh, or check:
+
+```bash
+oc logs -n "$RHDH_NAMESPACE" -l app.kubernetes.io/name=developer-hub -c backstage-backend --tail=50 | grep -i techdocs
+```
+
+**Repair:**
+
+```bash
+./scripts/setup-developer-hub-techdocs.sh
+./scripts/setup-developer-hub-config.sh
+```
+
+---
+
 ## Quick reference
 
 | Symptom | First command to try |
@@ -268,6 +307,8 @@ Pull the latest `main` — helper functions live in `scripts/lib/common.sh`.
 | Stuck on plugin lock | `./scripts/setup-developer-hub-dynamic-plugins-cache.sh --clear-lock` then config or repair |
 | Registry / Ansible init failure | `./scripts/setup-developer-hub-aap.sh --force-rollout` |
 | Empty catalog / missing config | `./scripts/setup-developer-hub-config.sh` |
+| Orchestrator ENOTFOUND / Data Index | `./scripts/setup-orchestrator.sh` then config |
+| TechDocs search 404 right after bootstrap | Wait 1–2 min; `./scripts/setup-developer-hub-techdocs.sh` |
 | Full stack idle / scaled down | `./scripts/ensure-workshop-platform.sh` |
 | Stuck pod / platform repair (after lock cleared) | `./scripts/repair-developer-hub.sh` |
 | Validate end-to-end | `./scripts/validate-workshop.sh` |

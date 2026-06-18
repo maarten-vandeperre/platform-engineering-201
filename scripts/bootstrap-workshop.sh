@@ -8,6 +8,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/lib/orchestrator.sh"
 
 echo "Platform Engineering 201 — full workshop bootstrap"
 echo "Namespace: ${WORKSHOP_NAMESPACE}"
@@ -86,10 +88,28 @@ fi
 echo ""
 echo "== Developer Hub configuration =="
 "${SCRIPT_DIR}/setup-developer-hub-kubernetes.sh"
+
+if orchestrator_enabled; then
+  echo ""
+  echo "== Orchestrator Data Index (before RHDH config) =="
+  ensure_orchestrator_data_index || echo "Warning: Orchestrator Data Index setup skipped or failed."
+else
+  echo "Orchestrator steps skipped (SKIP_ORCHESTRATOR=true)."
+fi
+
+echo ""
+echo "== TechDocs volumes (before RHDH config) =="
+"${SCRIPT_DIR}/setup-developer-hub-techdocs.sh" || echo "Warning: TechDocs volume setup skipped."
+
 "${SCRIPT_DIR}/setup-developer-hub-config.sh"
 "${SCRIPT_DIR}/configure-developer-hub-catalog.sh"
-"${SCRIPT_DIR}/setup-developer-hub-techdocs.sh"
-"${SCRIPT_DIR}/setup-orchestrator.sh" || echo "Warning: Orchestrator setup skipped or failed."
+
+if orchestrator_enabled; then
+  echo ""
+  echo "== Orchestrator workflows =="
+  ORCHESTRATOR_SKIP_CONFIG=true "${SCRIPT_DIR}/setup-orchestrator.sh" \
+    || echo "Warning: Orchestrator workflow setup skipped or failed."
+fi
 
 echo ""
 echo "== Platform readiness =="
