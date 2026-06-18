@@ -1,5 +1,6 @@
 # Platform Engineering 201 — Complete Tutorial
-_I've tested the commands on a MacBook._
+
+**!!!! important:** If you start on the developer sandbox on developers.redhat.com, do an "oc login" towards the OpenShift sandbox first, when starting in the devspaces sandbox.
 
 End-to-end guide from a **clean OpenShift sandbox** to the **full workshop state**: People CRUD app, Keycloak, GitOps, Red Hat Developer Hub with catalog, TechDocs, Tech Radar, Learning Paths, GitHub integrations, Orchestrator workflow, optional **Developer Lightspeed** (OpenAI chat assistant), optional **Ansible Automation Platform** plugin, Egyptian theme, and organization entity model.
 

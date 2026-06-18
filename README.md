@@ -1,5 +1,7 @@
 # Platform Engineering 201
 
+**!!!! important:** If you start on the developer sandbox on developers.redhat.com, do an "oc login" towards the OpenShift sandbox first, when starting in the devspaces sandbox.
+
 _This originated after my Platform Engineering 101 sessions, where I got the question "nice, but how do I get started with it?". Well, let me show you._
   
   
